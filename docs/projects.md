@@ -21,7 +21,8 @@ Bucket Storage `receipts`. Subes foto/PDF en Movimientos → parse con BYOK (vis
 
 ## Checklist
 
-- [ ] Migración `20260911080000_projects_invites_receipts.sql` aplicada
+- [x] Migración `20260911080000_projects_invites_receipts.sql` aplicada
+- [x] Fix `create_project` RPC (`20260911170000_create_project_rpc.sql`) — INSERT+RETURNING fallaba por RLS
 - [ ] Switcher en header cambia el ledger
 - [ ] Crear proyecto “Gatos”, cuenta y movimiento aislados de Personal
 - [ ] Invitar por email → `/invite/[token]` → membership

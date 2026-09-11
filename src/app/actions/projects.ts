@@ -24,7 +24,7 @@ function appBaseUrl() {
 export async function createProject(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
 
   const parsed = z
     .object({
@@ -36,44 +36,25 @@ export async function createProject(
     return { ok: false, error: "Ponle un nombre al proyecto." };
   }
 
-  const baseSlug = slugifyProjectName(parsed.data.name);
-  let slug = baseSlug;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({
-        name: parsed.data.name,
-        slug,
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
+  const slug = slugifyProjectName(parsed.data.name);
+  const { data, error } = await supabase.rpc("create_project", {
+    p_name: parsed.data.name,
+    p_slug: slug,
+  });
 
-    if (!error && data) {
-      const { error: memberError } = await supabase
-        .from("project_members")
-        .insert({
-          project_id: data.id,
-          user_id: user.id,
-          role: "owner",
-        });
-      if (memberError) {
-        return { ok: false, error: memberError.message };
-      }
-      await setActiveProjectCookie(data.id);
-      revalidatePath("/app");
-      revalidatePath("/app/projects");
-      redirect(`/app/projects/${data.id}`);
-    }
-
-    if (error?.code === "23505") {
-      slug = `${baseSlug}-${randomBytes(2).toString("hex")}`;
-      continue;
-    }
-    return { ok: false, error: error?.message ?? "No se pudo crear el proyecto." };
+  if (error) {
+    return { ok: false, error: error.message };
   }
 
-  return { ok: false, error: "Ese nombre ya está en uso. Prueba otro." };
+  const projectId = typeof data === "string" ? data : String(data ?? "");
+  if (!z.string().uuid().safeParse(projectId).success) {
+    return { ok: false, error: "No se pudo crear el proyecto." };
+  }
+
+  await setActiveProjectCookie(projectId);
+  revalidatePath("/app");
+  revalidatePath("/app/projects");
+  redirect(`/app/projects/${projectId}`);
 }
 
 export async function switchProject(formData: FormData): Promise<void> {

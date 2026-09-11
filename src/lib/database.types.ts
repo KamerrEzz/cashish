@@ -827,6 +827,10 @@ export type Database = {
         Args: { p_project_id: string };
         Returns: boolean;
       };
+      create_project: {
+        Args: { p_name: string; p_slug: string };
+        Returns: string;
+      };
       accept_project_invite: {
         Args: { p_token: string };
         Returns: string;

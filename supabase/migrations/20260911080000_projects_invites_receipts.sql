@@ -202,7 +202,10 @@ alter table public.project_invites enable row level security;
 alter table public.receipts enable row level security;
 
 create policy "projects_select_member" on public.projects
-  for select using (public.is_project_member(id));
+  for select using (
+    public.is_project_member(id)
+    or created_by = auth.uid()
+  );
 create policy "projects_insert_authenticated" on public.projects
   for insert with check (auth.uid() = created_by);
 create policy "projects_update_owner" on public.projects
