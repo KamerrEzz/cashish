@@ -1,84 +1,118 @@
 # Cashish
 
-Finanzas personales (México / MXN) con **tarjetas de crédito reales**: límite, disponible, corte, fecha de pago, pagos vinculados y suscripciones por tarjeta.
+<p align="center">
+  <strong>Finanzas personales con crédito de verdad</strong><br/>
+  México · MXN · cortes · pagos · suscripciones · MCP para agentes
+</p>
+
+<p align="center">
+  <a href="https://cashish-beta.vercel.app">Live preview</a>
+  ·
+  <a href="https://cashish-beta.vercel.app/docs/mcp">MCP docs</a>
+  ·
+  <a href="#conectar-agentes-mcp">Conectar agentes</a>
+</p>
+
+---
+
+## Por qué existe
+
+La mayoría de apps tratan la tarjeta de crédito como “otra cuenta en negativo”.  
+**Cashish modela el ciclo real:** límite, disponible, día de corte, fecha de pago, cargos del periodo y pagos vinculados desde tu débito.
+
+Además recuerda **qué tarjeta cobra Netflix** y cuándo toca el siguiente cobro.
 
 ## Stack
 
-- Next.js (App Router)
-- Supabase (Auth magic link, Postgres, RLS)
-- Montos en centavos enteros (`src/lib/money.ts`)
-- Recordatorios in-app + email (cron diario + Resend opcional)
+| Capa | Tecnología |
+| --- | --- |
+| App | Next.js (App Router) |
+| Datos | Supabase Postgres + Auth + RLS |
+| Dinero | Centavos enteros (`Money`), nunca float |
+| Agentes | MCP Streamable HTTP en `/api/mcp` |
+| Deploy | Vercel |
 
-## Setup local
+## Funciones (Entrega 1)
 
-1. Copia env:
+- Cuentas: efectivo, débito, ahorros y **TDC**
+- Perfil de tarjeta: límite, día de corte, día de pago
+- Periodos de estado (abrir → cerrar snapshot → marcar pagado)
+- Movimientos e ingresos
+- Pago a tarjeta como **transferencia vinculada**
+- Suscripciones ligadas a una tarjeta
+- Recordatorios in-app (+ email cuando hay Resend)
+- **MCP** para Cursor / Claude / otros agentes
+
+## Conectar agentes (MCP)
+
+1. Entra a la app → **Agentes** → crea una clave (`csh_…`).
+2. Configura tu cliente:
+
+```json
+{
+  "mcpServers": {
+    "cashish": {
+      "url": "https://cashish-beta.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer csh_TU_CLAVE"
+      }
+    }
+  }
+}
+```
+
+Herramientas: `cashish_dashboard`, `cashish_list_accounts`, `cashish_list_transactions`, `cashish_create_transaction`, `cashish_pay_credit_card`, `cashish_list_subscriptions`, `cashish_create_subscription`, `cashish_list_reminders`.
+
+> El endpoint MCP requiere `SUPABASE_SERVICE_ROLE_KEY` en el entorno del servidor (nunca en el cliente).
+
+## Desarrollo local
 
 ```bash
 cp .env.example .env.local
-```
+# Rellena NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+# SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET
 
-2. Arranca Supabase local (Docker requerido):
-
-```bash
-npx supabase start
-```
-
-Copia `API URL`, `anon key` y `service_role key` a `.env.local`.
-
-3. Aplica migraciones (si `start` no las aplicó):
-
-```bash
-npx supabase db reset
-```
-
-4. En el dashboard de Auth local, confirma que el magic link / Inbucket funciona (`supabase status` muestra el correo de prueba).
-
-5. App:
-
-```bash
 npm install
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000).
+Migraciones: `supabase/migrations/`.
 
-## Preview desplegado
+```bash
+npm test
+npm run build
+```
 
-- App: https://cashish-beta.vercel.app
-- Supabase project: `cashish` (`qlvjfbpnmpzkxmopcqte`)
-- GitHub: https://github.com/KamerrEzz/cashish
+## Variables de entorno
 
-### Auth (obligatorio para login)
+| Variable | Uso |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Proyecto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente / SSR |
+| `SUPABASE_SERVICE_ROLE_KEY` | Cron + MCP (secreto) |
+| `CRON_SECRET` | Auth del job `/api/cron/reminders` |
+| `NEXT_PUBLIC_APP_URL` | URL pública (redirects / snippets MCP) |
+| `RESEND_API_KEY` | Emails de recordatorio (opcional) |
 
-En [Auth URL Configuration](https://supabase.com/dashboard/project/qlvjfbpnmpzkxmopcqte/auth/url-configuration):
+## Estructura
 
-1. **Site URL** = `https://cashish-beta.vercel.app`
-2. **Redirect URLs** agrega `https://cashish-beta.vercel.app/auth/callback`
+```
+src/
+  app/           # UI + API (mcp, cron, auth)
+  components/
+  lib/
+    money.ts     # aritmética segura en centavos
+    mcp/         # auth de claves + tools MCP
+    supabase/
+supabase/migrations/
+```
 
-Opcional pero recomendado para preview: en Authentication → Providers → Email, desactiva **Confirm email** para poder entrar ya con email+contraseña.
+## Roadmap breve
 
-### Cron / emails (opcional)
+1. Import CSV/OFX + sugerencias de suscripción  
+2. Cashflow “¿alcanzo a cubrir los recurrentes?”  
+3. MSI · envelopes · push · hogar compartido  
 
-En Vercel → Project → Settings → Environment Variables, agrega `SUPABASE_SERVICE_ROLE_KEY` (API → service_role en Supabase). Sin esa key el app funciona; solo falla el job `/api/cron/reminders`.
+## Licencia
 
-`CRON_SECRET` ya está en Vercel.
-
-## Scripts
-
-- `npm run dev` — app
-- `npm test` — tests de Money
-- `npm run lint` — ESLint
-- Cron manual: `GET /api/cron/reminders` con header `Authorization: Bearer $CRON_SECRET`
-
-## Entrega 1 (implementada)
-
-- Cuentas cash / débito / ahorros / TDC
-- Perfil TDC (límite, día corte, día pago)
-- Periodos de estado (abrir, cerrar snapshot, marcar pagado)
-- Movimientos + pago TDC por transferencia vinculada
-- Suscripciones ligadas a cuenta/tarjeta
-- Dashboard + recordatorios in-app/email
-
-## Fuera de alcance (siguiente)
-
-CSV/OFX, cashflow “¿alcanzo?”, MSI, envelopes, push, multi-usuario, bank sync.
+Uso personal por ahora. El código vive en este repositorio.

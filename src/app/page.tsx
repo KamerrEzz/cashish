@@ -14,14 +14,14 @@ export default function HomePage() {
         <p className="mt-4 max-w-lg text-[var(--muted)]">
           Deja de tratar la tarjeta como débito. Registra cargos, cierra
           estados de cuenta, paga con transferencia vinculada y no olvides qué
-          tarjeta usa Netflix.
+          tarjeta usa Netflix. Conecta agentes con MCP.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/login" className={btnPrimary}>
             Entrar
           </Link>
-          <Link href="/login" className={btnGhost}>
-            Crear cuenta
+          <Link href="/docs/mcp" className={btnGhost}>
+            Docs MCP
           </Link>
         </div>
       </main>

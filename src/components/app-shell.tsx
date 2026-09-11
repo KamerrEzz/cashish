@@ -8,6 +8,7 @@ const nav = [
   { href: "/app/transactions", label: "Movimientos" },
   { href: "/app/subscriptions", label: "Suscripciones" },
   { href: "/app/reminders", label: "Recordatorios" },
+  { href: "/app/agents", label: "Agentes" },
 ];
 
 export async function AppShell({ children }: { children: React.ReactNode }) {

@@ -393,6 +393,47 @@ export type Database = {
           },
         ];
       };
+      mcp_api_keys: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          key_prefix: string;
+          key_hash: string;
+          last_used_at: string | null;
+          revoked_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          key_prefix: string;
+          key_hash: string;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          key_prefix?: string;
+          key_hash?: string;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mcp_api_keys_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -412,6 +453,10 @@ export type Database = {
           p_minimum_payment_cents?: number | null;
         };
         Returns: string;
+      };
+      mcp_resolve_api_key: {
+        Args: { p_key_hash: string };
+        Returns: { user_id: string; key_id: string }[];
       };
     };
     Enums: {
