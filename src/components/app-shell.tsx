@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
+import { NavigationProgress } from "@/components/navigation-progress";
 import { ProjectSwitcher } from "@/components/project-switcher";
 import { maybeRedirectToOnboarding } from "@/lib/onboarding-gate";
 import { requireProject } from "@/lib/projects";
@@ -21,6 +22,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-full">
+      <NavigationProgress />
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--header)] backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">

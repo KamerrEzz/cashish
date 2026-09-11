@@ -1,6 +1,7 @@
-export default function AppLoading() {
+/** Shared pulse skeleton for heavy routes that still warrant a loading boundary. */
+export function PageSkeleton() {
   return (
-    <div className="dash-enter space-y-6 animate-pulse">
+    <div className="dash-enter space-y-6 animate-pulse" aria-busy="true">
       <div className="h-8 w-48 rounded-lg bg-[var(--line)]" />
       <div className="h-4 w-72 max-w-full rounded bg-[var(--line)]" />
       <div className="grid gap-4 sm:grid-cols-3">

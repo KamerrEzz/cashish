@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
@@ -18,6 +18,17 @@ function linkClass(active: boolean, dense = false) {
     return `${pad} rounded-md text-[var(--accent-deep)] font-medium bg-[var(--accent-soft)]`;
   }
   return `${pad} rounded-md text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--wash)] transition-colors`;
+}
+
+function NavLinkPending() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span
+      aria-hidden
+      className="ml-1 inline-block size-1.5 animate-pulse rounded-full bg-[var(--accent)]"
+    />
+  );
 }
 
 function NavLink({
@@ -39,11 +50,13 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      prefetch={true}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={linkClass(active, dense)}
     >
       {item.label}
+      <NavLinkPending />
     </Link>
   );
 }
@@ -105,6 +118,7 @@ function MoreMenu({
               key={item.href}
               role="menuitem"
               href={item.href}
+              prefetch={true}
               onClick={() => {
                 setOpen(false);
                 onNavigate?.();
@@ -116,6 +130,7 @@ function MoreMenu({
               }`}
             >
               {item.label}
+              <NavLinkPending />
             </Link>
           ))}
         </div>

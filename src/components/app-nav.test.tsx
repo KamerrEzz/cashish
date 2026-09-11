@@ -11,16 +11,19 @@ vi.mock("next/link", () => ({
   default: ({
     children,
     href,
+    prefetch: _prefetch,
     ...rest
   }: {
     children: React.ReactNode;
     href: string;
+    prefetch?: boolean;
     [key: string]: unknown;
   }) => (
     <a href={href} {...rest}>
       {children}
     </a>
   ),
+  useLinkStatus: () => ({ pending: false }),
 }));
 
 vi.mock("@/components/theme-toggle", () => ({
