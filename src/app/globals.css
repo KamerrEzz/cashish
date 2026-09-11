@@ -23,8 +23,8 @@
   --danger-soft: #f7eaea;
   --positive: #1f6b4f;
   --positive-ink: #144836;
-  --glow-a: #dfe6f0;
-  --glow-b: #e8e4dc;
+  --glow-a: #e4e9f0;
+  --glow-b: #eef1f5;
   --header: rgba(255, 255, 255, 0.86);
   --shadow: 0 1px 0 rgba(12, 18, 34, 0.04), 0 8px 24px -16px rgba(12, 18, 34, 0.18);
   --radius: 0.625rem;
@@ -51,8 +51,9 @@ html.dark {
   --danger-soft: #2a1816;
   --positive: #6aab90;
   --positive-ink: #a8d4c0;
-  --glow-a: #12161f;
-  --glow-b: #16140f;
+  /* Keep glows nearly identical to wash — hard radial edges read as a “cut”. */
+  --glow-a: #0e1118;
+  --glow-b: #0d0f14;
   --header: rgba(20, 24, 32, 0.9);
   --shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 12px 32px -20px rgba(0, 0, 0, 0.55);
   --background: var(--wash);
@@ -67,14 +68,25 @@ html.dark {
   --font-display: var(--font-display);
 }
 
+html {
+  min-height: 100%;
+  background-color: var(--wash);
+}
+
 body {
-  background:
-    radial-gradient(900px 420px at 0% -10%, var(--glow-a) 0%, transparent 55%),
-    radial-gradient(700px 380px at 100% 0%, var(--glow-b) 0%, transparent 50%),
-    var(--wash);
+  min-height: 100%;
   color: var(--ink);
   font-family: var(--font-body), system-ui, sans-serif;
   font-feature-settings: "ss01" on, "kern" on;
+  /* Fixed wash + soft top wash so scroll never reveals a gradient seam. */
+  background-color: var(--wash);
+  background-image: radial-gradient(
+    ellipse 140% 70% at 50% -30%,
+    var(--glow-a) 0%,
+    transparent 72%
+  );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 /* Hairline utility for ledger feel */
