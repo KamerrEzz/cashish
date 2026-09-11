@@ -21,11 +21,13 @@ export function PageHeader({
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-tight text-[var(--ink)]">
+        <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-tight text-[var(--ink)] md:text-[2rem]">
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">{subtitle}</p>
+          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
+            {subtitle}
+          </p>
         ) : null}
       </div>
       {action}
@@ -65,10 +67,10 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 text-[var(--ink)] outline-none ring-[var(--accent)] placeholder:text-[var(--muted)] focus:ring-2";
+  "w-full rounded-xl border border-[var(--line)] bg-[var(--input)] px-3 py-2.5 text-[var(--ink)] outline-none ring-[var(--accent)] placeholder:text-[var(--muted)] focus:ring-2";
 
 export const btnPrimary =
-  "inline-flex items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-deep)] disabled:opacity-50";
+  "inline-flex items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50";
 
 export const btnGhost =
-  "inline-flex items-center justify-center rounded-xl border border-[var(--line)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--wash)]";
+  "inline-flex items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--wash)]";
