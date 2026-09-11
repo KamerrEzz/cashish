@@ -42,6 +42,27 @@ npm run dev
 
 Abre [http://localhost:3000](http://localhost:3000).
 
+## Preview desplegado
+
+- App: https://cashish-beta.vercel.app
+- Supabase project: `cashish` (`qlvjfbpnmpzkxmopcqte`)
+- GitHub: https://github.com/KamerrEzz/cashish
+
+### Auth (obligatorio para login)
+
+En [Auth URL Configuration](https://supabase.com/dashboard/project/qlvjfbpnmpzkxmopcqte/auth/url-configuration):
+
+1. **Site URL** = `https://cashish-beta.vercel.app`
+2. **Redirect URLs** agrega `https://cashish-beta.vercel.app/auth/callback`
+
+Opcional pero recomendado para preview: en Authentication → Providers → Email, desactiva **Confirm email** para poder entrar ya con email+contraseña.
+
+### Cron / emails (opcional)
+
+En Vercel → Project → Settings → Environment Variables, agrega `SUPABASE_SERVICE_ROLE_KEY` (API → service_role en Supabase). Sin esa key el app funciona; solo falla el job `/api/cron/reminders`.
+
+`CRON_SECRET` ya está en Vercel.
+
 ## Scripts
 
 - `npm run dev` — app
