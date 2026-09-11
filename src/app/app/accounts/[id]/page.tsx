@@ -12,9 +12,14 @@ import {
   Field,
   inputClass,
 } from "@/components/ui";
+import { EmptyState, MoneyTone, SectionTitle } from "@/components/empty-state";
+import { UtilizationBar } from "@/components/dashboard/credit-ui";
 import { SubmitButton } from "@/components/submit-button";
-import { closeStatementPeriod, markStatementPaid } from "@/app/actions/transfers";
-import { createLinkedTransfer } from "@/app/actions/transfers";
+import {
+  closeStatementPeriod,
+  markStatementPaid,
+  createLinkedTransfer,
+} from "@/app/actions/transfers";
 
 export default async function AccountDetailPage({
   params,
@@ -63,90 +68,109 @@ export default async function AccountDetailPage({
 
   const openPeriod = (periods ?? []).find((p) => p.status === "open");
   const closedUnpaid = (periods ?? []).filter((p) => p.status === "closed");
+  const isCard = account.type === "credit_card" && profile;
+  const available = isCard
+    ? availableCreditCents(profile.credit_limit_cents, account.balance_cents)
+    : 0;
 
   return (
-    <div>
+    <div className="dash-enter space-y-6">
       <PageHeader
         title={account.name}
         subtitle={accountTypeLabel(account.type)}
         action={
-          <Link href="/app/transactions" className={btnPrimary}>
-            Nuevo movimiento
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/app/accounts" className={btnGhost}>
+              Todas
+            </Link>
+            <Link href="/app/transactions" className={btnPrimary}>
+              Movimiento
+            </Link>
+          </div>
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <Panel>
-          {account.type === "credit_card" && profile ? (
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-[var(--muted)]">Debes</dt>
-                <dd className="text-xl font-semibold">
-                  <Mxn cents={account.balance_cents} />
-                </dd>
+          {isCard ? (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs text-[var(--muted)]">Debes</p>
+                  <p className="mt-1 font-[family-name:var(--font-display)] text-3xl tracking-tight tabular-nums">
+                    <Mxn cents={account.balance_cents} />
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-[var(--muted)]">Disponible</p>
+                  <p
+                    className={`mt-1 font-[family-name:var(--font-display)] text-2xl tabular-nums ${
+                      available < 0 ? "text-[var(--danger-ink)]" : ""
+                    }`}
+                  >
+                    <Mxn cents={available} />
+                  </p>
+                </div>
               </div>
-              <div>
-                <dt className="text-[var(--muted)]">Disponible</dt>
-                <dd className="text-xl font-semibold">
-                  <Mxn
-                    cents={availableCreditCents(
-                      profile.credit_limit_cents,
-                      account.balance_cents,
-                    )}
-                  />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--muted)]">Límite</dt>
-                <dd>
-                  <Mxn cents={profile.credit_limit_cents} />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--muted)]">Pago mínimo</dt>
-                <dd>
-                  <Mxn cents={profile.minimum_payment_cents} />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--muted)]">Próximo corte</dt>
-                <dd>{openPeriod?.closes_on ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-[var(--muted)]">Fecha límite de pago</dt>
-                <dd>{openPeriod?.due_on ?? "—"}</dd>
-              </div>
-            </dl>
+              <UtilizationBar
+                owedCents={account.balance_cents}
+                limitCents={profile.credit_limit_cents}
+              />
+              <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 text-sm">
+                <div>
+                  <dt className="text-xs text-[var(--muted)]">Límite</dt>
+                  <dd className="mt-0.5 font-medium">
+                    <Mxn cents={profile.credit_limit_cents} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[var(--muted)]">Pago mínimo</dt>
+                  <dd className="mt-0.5 font-medium">
+                    <Mxn cents={profile.minimum_payment_cents} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[var(--muted)]">Próximo corte</dt>
+                  <dd className="mt-0.5 font-medium">
+                    {openPeriod?.closes_on ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[var(--muted)]">Límite de pago</dt>
+                  <dd className="mt-0.5 font-medium">
+                    {openPeriod?.due_on ?? "—"}
+                  </dd>
+                </div>
+              </dl>
+            </>
           ) : (
             <div>
-              <p className="text-sm text-[var(--muted)]">Saldo</p>
-              <p className="text-2xl font-semibold">
+              <p className="text-xs text-[var(--muted)]">Saldo disponible</p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-3xl tracking-tight tabular-nums">
                 <Mxn cents={account.balance_cents} />
+              </p>
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                Cuenta líquida para gastos, transferencias y pagos de tarjeta.
               </p>
             </div>
           )}
         </Panel>
 
-        {account.type === "credit_card" ? (
+        {isCard ? (
           <Panel>
-            <h2 className="font-semibold">Pagar tarjeta</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Transferencia vinculada: baja tu débito y reduce la deuda.
-            </p>
+            <SectionTitle
+              title="Pagar tarjeta"
+              subtitle="Transferencia vinculada: baja el débito y reduce la deuda"
+            />
             <form
               action={async (formData) => {
                 "use server";
                 await createLinkedTransfer(formData);
               }}
-              className="mt-4 space-y-3"
+              className="space-y-3"
             >
               <input type="hidden" name="toAccountId" value={account.id} />
-              <input
-                type="hidden"
-                name="occurredOn"
-                value={todayMexico()}
-              />
+              <input type="hidden" name="occurredOn" value={todayMexico()} />
               <Field label="Desde">
                 <select name="fromAccountId" required className={inputClass}>
                   {(sources ?? []).map((s) => (
@@ -175,26 +199,44 @@ export default async function AccountDetailPage({
               <SubmitButton>Registrar pago</SubmitButton>
             </form>
           </Panel>
-        ) : null}
+        ) : (
+          <Panel>
+            <SectionTitle
+              title="Acciones"
+              subtitle="Sigue el dinero desde esta cuenta"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Link href="/app/transactions" className={btnPrimary}>
+                Registrar movimiento
+              </Link>
+              <Link href="/app/analytics" className={btnGhost}>
+                Ver analíticas
+              </Link>
+            </div>
+          </Panel>
+        )}
       </div>
 
-      {account.type === "credit_card" && openPeriod ? (
-        <Panel className="mt-4">
-          <h2 className="font-semibold">Cerrar corte</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Congela el periodo {openPeriod.opens_on} → {openPeriod.closes_on} y
-            abre el siguiente ciclo.
-          </p>
+      {isCard && openPeriod ? (
+        <Panel>
+          <SectionTitle
+            title="Cerrar corte"
+            subtitle={`Congela ${openPeriod.opens_on} → ${openPeriod.closes_on} y abre el siguiente ciclo`}
+          />
           <form
             action={async (formData) => {
               "use server";
               await closeStatementPeriod(formData);
             }}
-            className="mt-4 flex flex-wrap items-end gap-3"
+            className="flex flex-wrap items-end gap-3"
           >
             <input type="hidden" name="accountId" value={account.id} />
             <Field label="Pago mínimo del estado (opcional)">
-              <input name="minimumPayment" className={inputClass} placeholder="0.00" />
+              <input
+                name="minimumPayment"
+                className={inputClass}
+                placeholder="0.00"
+              />
             </Field>
             <SubmitButton>Cerrar periodo</SubmitButton>
           </form>
@@ -202,16 +244,19 @@ export default async function AccountDetailPage({
       ) : null}
 
       {closedUnpaid.length > 0 ? (
-        <Panel className="mt-4">
-          <h2 className="font-semibold">Estados cerrados</h2>
-          <ul className="mt-3 space-y-2">
+        <Panel>
+          <SectionTitle
+            title="Estados cerrados"
+            subtitle="Marca como pagado cuando saldes el corte"
+          />
+          <ul className="space-y-3">
             {closedUnpaid.map((p) => (
               <li
                 key={p.id}
-                className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] pb-3 text-sm last:border-0 last:pb-0"
               >
                 <span>
-                  Corte {p.closes_on} · pago límite {p.due_on} · saldo{" "}
+                  Corte {p.closes_on} · pago {p.due_on} ·{" "}
                   <Mxn cents={p.closing_balance_cents ?? 0} />
                 </span>
                 <form
@@ -228,16 +273,21 @@ export default async function AccountDetailPage({
         </Panel>
       ) : null}
 
-      <Panel className="mt-4">
-        <h2 className="font-semibold">Movimientos recientes</h2>
-        <ul className="mt-3 divide-y divide-[var(--line)]">
-          {(txs ?? []).length === 0 ? (
-            <li className="py-2 text-sm text-[var(--muted)]">Sin movimientos.</li>
-          ) : (
-            (txs ?? []).map((tx) => (
+      <Panel>
+        <SectionTitle title="Movimientos recientes" />
+        {(txs ?? []).length === 0 ? (
+          <EmptyState
+            title="Sin movimientos"
+            body="Los cargos e ingresos de esta cuenta aparecerán aquí."
+            actionHref="/app/transactions"
+            actionLabel="Registrar"
+          />
+        ) : (
+          <ul className="divide-y divide-[var(--line)]">
+            {(txs ?? []).map((tx) => (
               <li
                 key={tx.id}
-                className="flex justify-between gap-2 py-2 text-sm"
+                className="flex justify-between gap-2 py-3 text-sm"
               >
                 <div>
                   <p className="font-medium">
@@ -247,11 +297,11 @@ export default async function AccountDetailPage({
                     {tx.occurred_on} · {tx.type}
                   </p>
                 </div>
-                <Mxn cents={tx.amount_cents} className="tabular-nums" />
+                <MoneyTone cents={tx.amount_cents} type={tx.type} />
               </li>
-            ))
-          )}
-        </ul>
+            ))}
+          </ul>
+        )}
       </Panel>
     </div>
   );

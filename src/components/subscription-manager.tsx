@@ -44,7 +44,9 @@ export function SubscriptionManager({
         action={onCreate}
         className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
       >
-        <h2 className="font-semibold">Nueva suscripción</h2>
+        <h2 className="font-[family-name:var(--font-display)] text-lg">
+          Nueva suscripción
+        </h2>
         <Field label="Nombre">
           <input
             name="name"
@@ -101,7 +103,9 @@ export function SubscriptionManager({
         <Field label="Notas">
           <input name="notes" className={inputClass} />
         </Field>
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
+        {error ? (
+          <p className="text-sm text-[var(--danger-ink)]">{error}</p>
+        ) : null}
         <SubmitButton>Guardar</SubmitButton>
       </form>
 

@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { PageHeader } from "@/components/ui";
+import { PageHeader, Panel } from "@/components/ui";
 import { AgentsPanel } from "@/components/agents-panel";
 
 export default async function AgentsPage() {
@@ -13,16 +13,29 @@ export default async function AgentsPage() {
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
     "https://cashish-beta.vercel.app";
 
+  const active = (keys ?? []).filter((k) => !k.revoked_at).length;
+
   return (
-    <div>
+    <div className="dash-enter space-y-8">
       <PageHeader
         title="Agentes"
-        subtitle="Conecta Cursor, Claude u otros agentes vía MCP con una clave personal."
+        subtitle="MCP para que agentes de IA lean y actúen sobre tus finanzas."
       />
-      <AgentsPanel
-        keys={keys ?? []}
-        mcpUrl={`${appUrl}/api/mcp`}
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Panel className="!p-4">
+          <p className="text-xs text-[var(--muted)]">Claves activas</p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-2xl tabular-nums">
+            {active}
+          </p>
+        </Panel>
+        <Panel className="!p-4">
+          <p className="text-xs text-[var(--muted)]">Endpoint</p>
+          <p className="mt-1 truncate font-mono text-xs text-[var(--ink)]">
+            {appUrl}/api/mcp
+          </p>
+        </Panel>
+      </div>
+      <AgentsPanel keys={keys ?? []} mcpUrl={`${appUrl}/api/mcp`} />
     </div>
   );
 }
