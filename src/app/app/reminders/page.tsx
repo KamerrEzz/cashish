@@ -26,13 +26,13 @@ export default async function RemindersPage() {
   const done = (reminders ?? []).filter((r) => r.status !== "pending");
 
   return (
-    <div className="dash-enter space-y-8">
+    <div className="dash-enter space-y-6 sm:space-y-8">
       <PageHeader
         title="Avisos"
         subtitle="Cortes, pagos, suscripciones y alertas de liquidez — sin ruido."
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Panel className="!p-4">
           <p className="text-xs text-[var(--muted)]">Pendientes</p>
           <p className="mt-1 font-[family-name:var(--font-display)] text-2xl tabular-nums">

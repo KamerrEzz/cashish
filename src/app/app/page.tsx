@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
-import { todayLabelMx, daysBetween } from "@/lib/dates";
+import { todayLabelMx, daysBetween, relativeDayLabel } from "@/lib/dates";
 import {
   Mxn,
   Panel,
@@ -14,6 +14,8 @@ import { SubmitButton } from "@/components/submit-button";
 import {
   CreditAgenda,
   StatCell,
+  SummaryCell,
+  SummaryStrip,
   UtilizationBar,
   urgencyFromDays,
   type AgendaItem,
@@ -121,7 +123,8 @@ export default async function DashboardPage() {
   agenda.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
   const agendaSoon = agenda.filter((e) => daysBetween(today, e.date) <= 45).slice(0, 8);
 
-  const nextEvent = agendaSoon[0];
+  const nextEvent =
+    agendaSoon.find((e) => daysBetween(today, e.date) >= 0) ?? agendaSoon[0];
   const greeting = firstName(profile?.full_name, user.email ?? undefined);
   const dateLabel = todayLabelMx(today);
 
@@ -134,29 +137,20 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="dash-enter space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+    <div className="dash-enter space-y-6 sm:space-y-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <p className="text-sm capitalize text-[var(--muted)]">{dateLabel}</p>
-          <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl tracking-tight text-[var(--ink)] md:text-4xl">
+          <h1 className="mt-1 font-[family-name:var(--font-display)] text-[clamp(1.75rem,5vw,2.25rem)] tracking-tight text-[var(--ink)]">
             {greeting ? `Hola, ${greeting}` : "Tu panorama"}
           </h1>
-          <p className="mt-2 max-w-lg text-sm text-[var(--muted)]">
+          <p className="mt-2 max-w-lg text-sm leading-relaxed text-[var(--muted)]">
             {nextEvent
-              ? (() => {
-                  const d = daysBetween(today, nextEvent.date);
-                  const when =
-                    d === 0
-                      ? "hoy"
-                      : d === 1
-                        ? "mañana"
-                        : `en ${d} días`;
-                  return `Lo siguiente: ${nextEvent.kind === "corte" ? "corte" : "pago"} de ${nextEvent.accountName} ${when}.`;
-                })()
+              ? `Lo siguiente: ${nextEvent.kind === "corte" ? "corte" : "pago"} de ${nextEvent.accountName} · ${relativeDayLabel(daysBetween(today, nextEvent.date)).toLowerCase()}.`
               : "Liquidez, crédito, suscripciones y flujo — tu sistema personal."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <Link href="/app/analytics" className={btnGhost}>
             Analíticas
           </Link>
@@ -171,7 +165,7 @@ export default async function DashboardPage() {
 
       {(reminders ?? []).length > 0 ? (
         <Panel className="border-[var(--warn)]/25 bg-[var(--warn-soft)]">
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
             <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
               Pendientes
             </h2>
@@ -186,7 +180,7 @@ export default async function DashboardPage() {
             {(reminders ?? []).map((r) => (
               <li
                 key={r.id}
-                className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)]/70 pb-3 last:border-0 last:pb-0"
+                className="flex flex-col gap-3 border-b border-[var(--line)]/70 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-[var(--ink)]">{r.title}</p>
@@ -207,59 +201,54 @@ export default async function DashboardPage() {
         </Panel>
       ) : null}
 
-      <section
-        aria-label="Resumen"
-        className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_1px_0_rgba(20,40,30,0.04)]"
-      >
-        <div className="grid gap-6 p-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0 lg:divide-x lg:divide-[var(--line)] lg:p-0">
-          <div className="lg:p-5">
-            <StatCell label="Patrimonio neto" hint="Liquidez − deuda TDC">
-              <span className={netWorth < 0 ? "text-[var(--danger-ink)]" : undefined}>
-                {netWorth < 0 ? "−" : null}
-                <Mxn cents={Math.abs(netWorth)} />
-              </span>
-            </StatCell>
-          </div>
-          <div className="lg:p-5">
-            <StatCell label="Liquidez" hint={`${liquid.length} cuenta${liquid.length === 1 ? "" : "s"}`}>
-              <Mxn cents={liquidTotal} />
-            </StatCell>
-          </div>
-          <div className="lg:p-5">
-            <StatCell label="Deuda TDC" hint={`${cards.length} tarjeta${cards.length === 1 ? "" : "s"}`}>
-              <Mxn cents={debtTotal} />
-            </StatCell>
-          </div>
-          <div className="lg:p-5">
-            <StatCell
-              label={minDueTotal > 0 ? "Pagos mínimos" : "Suscripciones / mes"}
-              hint={
-                minDueTotal > 0
-                  ? coverageOk
-                    ? "Cubiertos con tu liquidez"
-                    : "Tu liquidez no alcanza"
-                  : `${(subscriptions ?? []).length} activas`
+      <SummaryStrip>
+        <SummaryCell>
+          <StatCell label="Patrimonio neto" hint="Liquidez − deuda TDC">
+            <span className={netWorth < 0 ? "text-[var(--danger-ink)]" : undefined}>
+              {netWorth < 0 ? "−" : null}
+              <Mxn cents={Math.abs(netWorth)} />
+            </span>
+          </StatCell>
+        </SummaryCell>
+        <SummaryCell>
+          <StatCell label="Liquidez" hint={`${liquid.length} cuenta${liquid.length === 1 ? "" : "s"}`}>
+            <Mxn cents={liquidTotal} />
+          </StatCell>
+        </SummaryCell>
+        <SummaryCell>
+          <StatCell label="Deuda TDC" hint={`${cards.length} tarjeta${cards.length === 1 ? "" : "s"}`}>
+            <Mxn cents={debtTotal} />
+          </StatCell>
+        </SummaryCell>
+        <SummaryCell>
+          <StatCell
+            label={minDueTotal > 0 ? "Pagos mínimos" : "Suscripciones / mes"}
+            hint={
+              minDueTotal > 0
+                ? coverageOk
+                  ? "Cubiertos con tu liquidez"
+                  : "Tu liquidez no alcanza"
+                : `${(subscriptions ?? []).length} activas`
+            }
+          >
+            <span
+              className={
+                minDueTotal > 0 && !coverageOk
+                  ? "text-[var(--warn-ink)]"
+                  : undefined
               }
             >
-              <span
-                className={
-                  minDueTotal > 0 && !coverageOk
-                    ? "text-[var(--warn-ink)]"
-                    : undefined
-                }
-              >
-                <Mxn cents={minDueTotal > 0 ? minDueTotal : subMonthly} />
-              </span>
-            </StatCell>
-          </div>
-        </div>
-      </section>
+              <Mxn cents={minDueTotal > 0 ? minDueTotal : subMonthly} />
+            </span>
+          </StatCell>
+        </SummaryCell>
+      </SummaryStrip>
 
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Panel>
-          <div className="flex items-baseline justify-between gap-3">
-            <div>
-              <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)] sm:text-xl">
                 Calendario de crédito
               </h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
@@ -273,15 +262,15 @@ export default async function DashboardPage() {
               Cuentas
             </Link>
           </div>
-          <div className="mt-6">
+          <div className="mt-5 sm:mt-6">
             <CreditAgenda items={agendaSoon} today={today} />
           </div>
         </Panel>
 
         <Panel>
-          <div className="flex items-baseline justify-between gap-3">
-            <div>
-              <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)] sm:text-xl">
                 Liquidez
               </h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
@@ -305,11 +294,11 @@ export default async function DashboardPage() {
               </li>
             ) : (
               liquid.map((a) => (
-                <li key={a.id} className="flex items-center justify-between gap-3 py-3">
+                <li key={a.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
                     <Link
                       href={`/app/accounts/${a.id}`}
-                      className="font-medium text-[var(--ink)] hover:underline"
+                      className="block truncate font-medium text-[var(--ink)] hover:underline"
                     >
                       {a.name}
                     </Link>
@@ -326,9 +315,9 @@ export default async function DashboardPage() {
             )}
           </ul>
           {liquid.length > 0 ? (
-            <div className="mt-2 flex justify-between border-t border-[var(--line)] pt-3 text-sm">
+            <div className="mt-2 flex justify-between gap-3 border-t border-[var(--line)] pt-3 text-sm">
               <span className="text-[var(--muted)]">Total</span>
-              <Mxn cents={liquidTotal} className="font-semibold tabular-nums" />
+              <Mxn cents={liquidTotal} className="shrink-0 font-semibold tabular-nums" />
             </div>
           ) : null}
         </Panel>
@@ -336,10 +325,10 @@ export default async function DashboardPage() {
 
       <section aria-labelledby="tdc-heading">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h2
               id="tdc-heading"
-              className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]"
+              className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)] sm:text-xl"
             >
               Tarjetas de crédito
             </h2>
@@ -366,7 +355,7 @@ export default async function DashboardPage() {
             </p>
           </Panel>
         ) : (
-          <ul className="grid gap-4 md:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
             {cardsSorted.map((a) => {
               const cc = profileByAccount.get(a.id);
               const period = periodByAccount.get(a.id);
@@ -380,14 +369,16 @@ export default async function DashboardPage() {
               const over = cc ? a.balance_cents > cc.credit_limit_cents : false;
 
               return (
-                <li key={a.id}>
+                <li key={a.id} className="min-w-0">
                   <Link
                     href={`/app/accounts/${a.id}`}
-                    className="block rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[0_1px_0_rgba(20,40,30,0.04)] transition-[border-color,box-shadow] hover:border-[var(--accent)]/35 hover:shadow-[0_8px_24px_rgba(15,61,42,0.06)]"
+                    className="block h-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_1px_0_rgba(20,40,30,0.04)] transition-[border-color,box-shadow] hover:border-[var(--accent)]/35 hover:shadow-[0_8px_24px_rgba(15,61,42,0.06)] sm:p-5"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-[var(--ink)]">{a.name}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-[var(--ink)]">
+                          {a.name}
+                        </p>
                         {over ? (
                           <p className="mt-1 text-xs font-medium text-[var(--danger-ink)]">
                             Sobre el límite de crédito
@@ -402,7 +393,12 @@ export default async function DashboardPage() {
                                   : "text-[var(--danger-ink)]"
                             }`}
                           >
-                            Pago {dueDays <= 0 ? "vencido o hoy" : `en ${dueDays} días`}
+                            Pago{" "}
+                            {dueDays < 0
+                              ? "vencido"
+                              : dueDays === 0
+                                ? "hoy"
+                                : `en ${dueDays} días`}
                           </p>
                         ) : (
                           <p className="mt-1 text-xs text-[var(--muted)]">
@@ -410,9 +406,9 @@ export default async function DashboardPage() {
                           </p>
                         )}
                       </div>
-                      <div className="text-right">
+                      <div className="shrink-0 text-right">
                         <p className="text-xs text-[var(--muted)]">Debes</p>
-                        <p className="font-[family-name:var(--font-display)] text-xl tabular-nums tracking-tight">
+                        <p className="font-[family-name:var(--font-display)] text-lg tabular-nums tracking-tight sm:text-xl">
                           <Mxn cents={a.balance_cents} />
                         </p>
                       </div>
@@ -425,11 +421,11 @@ export default async function DashboardPage() {
                       />
                     ) : null}
 
-                    <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                      <div>
+                    <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 text-xs">
+                      <div className="min-w-0">
                         <dt className="text-[var(--muted)]">Disponible</dt>
                         <dd
-                          className={`mt-0.5 tabular-nums font-medium ${
+                          className={`mt-0.5 break-words tabular-nums font-medium ${
                             available < 0
                               ? "text-[var(--danger-ink)]"
                               : "text-[var(--ink)]"
@@ -438,13 +434,13 @@ export default async function DashboardPage() {
                           <Mxn cents={available} />
                         </dd>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <dt className="text-[var(--muted)]">Límite</dt>
-                        <dd className="mt-0.5 tabular-nums font-medium text-[var(--ink)]">
+                        <dd className="mt-0.5 break-words tabular-nums font-medium text-[var(--ink)]">
                           <Mxn cents={cc?.credit_limit_cents ?? 0} />
                         </dd>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <dt className="text-[var(--muted)]">Corte</dt>
                         <dd className="mt-0.5 font-medium text-[var(--ink)]">
                           {period?.closes_on ?? "—"}
@@ -455,7 +451,7 @@ export default async function DashboardPage() {
                           ) : null}
                         </dd>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <dt className="text-[var(--muted)]">Pago</dt>
                         <dd className="mt-0.5 font-medium text-[var(--ink)]">
                           {period?.due_on ?? "—"}
@@ -476,9 +472,9 @@ export default async function DashboardPage() {
       </section>
 
       <Panel>
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)] sm:text-xl">
               Suscripciones
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
@@ -511,15 +507,18 @@ export default async function DashboardPage() {
               return (
                 <li
                   key={s.id}
-                  className="flex flex-wrap items-center justify-between gap-2 py-3"
+                  className="flex items-start justify-between gap-3 py-3"
                 >
-                  <div>
-                    <p className="font-medium text-[var(--ink)]">{s.name}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-[var(--ink)]">{s.name}</p>
                     <p className="text-xs text-[var(--muted)]">
                       {s.merchant} · {accountName} · próximo {s.next_billing_on}
                     </p>
                   </div>
-                  <Mxn cents={s.amount_cents} className="tabular-nums font-medium" />
+                  <Mxn
+                    cents={s.amount_cents}
+                    className="shrink-0 tabular-nums font-medium"
+                  />
                 </li>
               );
             })

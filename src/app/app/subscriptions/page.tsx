@@ -32,13 +32,13 @@ export default async function SubscriptionsPage() {
   }, 0);
 
   return (
-    <div className="dash-enter space-y-8">
+    <div className="dash-enter space-y-6 sm:space-y-8">
       <PageHeader
         title="Suscripciones"
         subtitle="Qué se cobra, con qué cuenta, y cuánto pesa al mes."
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Panel className="!p-4">
           <p className="text-xs text-[var(--muted)]">Activas</p>
           <p className="mt-1 font-[family-name:var(--font-display)] text-2xl tabular-nums">

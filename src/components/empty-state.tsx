@@ -42,9 +42,9 @@ export function SectionTitle({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)] sm:text-xl">
           {title}
         </h2>
         {subtitle ? (

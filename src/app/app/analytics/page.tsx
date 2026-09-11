@@ -3,7 +3,12 @@ import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
 import { daysBetween, formatDateMx } from "@/lib/dates";
 import { Mxn, PageHeader, Panel } from "@/components/ui";
 import { EmptyState, SectionTitle } from "@/components/empty-state";
-import { StatCell, UtilizationBar } from "@/components/dashboard/credit-ui";
+import {
+  StatCell,
+  SummaryCell,
+  SummaryStrip,
+  UtilizationBar,
+} from "@/components/dashboard/credit-ui";
 import Link from "next/link";
 
 function monthBounds(todayIso: string) {
@@ -169,57 +174,55 @@ export default async function AnalyticsPage() {
   const compositionMax = Math.max(liquidTotal, debtTotal, 1);
 
   return (
-    <div className="dash-enter space-y-8">
+    <div className="dash-enter space-y-6 sm:space-y-8">
       <PageHeader
         title="Analíticas"
         subtitle={`Panorama de ${monthLabel}: patrimonio, flujo, crédito y suscripciones.`}
       />
 
-      <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
-        <div className="grid gap-6 p-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0 lg:divide-x lg:divide-[var(--line)] lg:p-0">
-          <div className="lg:p-5">
-            <StatCell
-              label="Patrimonio neto"
-              hint="Liquidez − deuda TDC"
+      <SummaryStrip>
+        <SummaryCell>
+          <StatCell label="Patrimonio neto" hint="Liquidez − deuda TDC">
+            <span
+              className={
+                netWorth < 0 ? "text-[var(--danger-ink)]" : "text-[var(--ink)]"
+              }
             >
-              <span
-                className={
-                  netWorth < 0 ? "text-[var(--danger-ink)]" : "text-[var(--ink)]"
-                }
-              >
-                {netWorth < 0 ? "−" : ""}
-                <Mxn cents={absNet} />
-              </span>
-            </StatCell>
-          </div>
-          <div className="lg:p-5">
-            <StatCell label="Flujo del mes" hint="Ingresos − gastos registrados">
-              <span
-                className={
-                  incomeMonth - expenseMonth >= 0
-                    ? "text-[var(--positive)]"
-                    : "text-[var(--danger-ink)]"
-                }
-              >
-                {incomeMonth - expenseMonth < 0 ? "−" : "+"}
-                <Mxn cents={Math.abs(incomeMonth - expenseMonth)} />
-              </span>
-            </StatCell>
-          </div>
-          <div className="lg:p-5">
-            <StatCell label="Uso de crédito" hint="Deuda / límite agregado">
-              {utilizationPct}%
-            </StatCell>
-          </div>
-          <div className="lg:p-5">
-            <StatCell label="Suscripciones / mes" hint={`${(subscriptions ?? []).length} activas`}>
-              <Mxn cents={subMonthly} />
-            </StatCell>
-          </div>
-        </div>
-      </section>
+              {netWorth < 0 ? "−" : ""}
+              <Mxn cents={absNet} />
+            </span>
+          </StatCell>
+        </SummaryCell>
+        <SummaryCell>
+          <StatCell label="Flujo del mes" hint="Ingresos − gastos registrados">
+            <span
+              className={
+                incomeMonth - expenseMonth >= 0
+                  ? "text-[var(--positive)]"
+                  : "text-[var(--danger-ink)]"
+              }
+            >
+              {incomeMonth - expenseMonth < 0 ? "−" : "+"}
+              <Mxn cents={Math.abs(incomeMonth - expenseMonth)} />
+            </span>
+          </StatCell>
+        </SummaryCell>
+        <SummaryCell>
+          <StatCell label="Uso de crédito" hint="Deuda / límite agregado">
+            {utilizationPct}%
+          </StatCell>
+        </SummaryCell>
+        <SummaryCell>
+          <StatCell
+            label="Suscripciones / mes"
+            hint={`${(subscriptions ?? []).length} activas`}
+          >
+            <Mxn cents={subMonthly} />
+          </StatCell>
+        </SummaryCell>
+      </SummaryStrip>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <Panel>
           <SectionTitle
             title="Composición"
@@ -288,7 +291,7 @@ export default async function AnalyticsPage() {
         </Panel>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <Panel>
           <SectionTitle
             title="Flujo registrado"
@@ -395,7 +398,7 @@ export default async function AnalyticsPage() {
             actionLabel="Nueva cuenta"
           />
         ) : (
-          <ul className="grid gap-4 md:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
             {cards.map((a) => {
               const p = profileByAccount.get(a.id);
               const due = dueSoon.find((d) => d.name === a.name);

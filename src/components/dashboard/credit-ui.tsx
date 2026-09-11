@@ -52,7 +52,7 @@ export function UtilizationBar({
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-[var(--muted)]">Uso del límite</span>
         <span
-          className={`tabular-nums font-medium ${over ? "text-[var(--danger-ink)]" : "text-[var(--ink)]"}`}
+          className={`shrink-0 tabular-nums font-medium ${over ? "text-[var(--danger-ink)]" : "text-[var(--ink)]"}`}
         >
           {pct}%
           {over ? " · sobre límite" : null}
@@ -85,14 +85,36 @@ export function StatCell({
   hint?: string;
 }) {
   return (
-    <div className="min-w-0">
-      <p className="text-xs text-[var(--muted)]">{label}</p>
-      <p className="mt-1 font-[family-name:var(--font-display)] text-2xl tracking-tight text-[var(--ink)] tabular-nums md:text-[1.75rem]">
+    <div className="min-w-0 overflow-hidden">
+      <p className="truncate text-xs text-[var(--muted)]">{label}</p>
+      <p className="mt-1.5 break-words font-[family-name:var(--font-display)] text-[clamp(1.25rem,2.6vw,1.75rem)] leading-tight tracking-tight text-[var(--ink)] tabular-nums">
         {children}
       </p>
       {hint ? (
-        <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-snug text-[var(--muted)]">
+          {hint}
+        </p>
       ) : null}
+    </div>
+  );
+}
+
+/** Responsive summary strip used on home + analytics. */
+export function SummaryStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <section
+      aria-label="Resumen"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--surface)] lg:shadow-[0_1px_0_rgba(20,40,30,0.04)]"
+    >
+      {children}
+    </section>
+  );
+}
+
+export function SummaryCell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_1px_0_rgba(20,40,30,0.04)] sm:p-5 lg:rounded-none lg:border-0 lg:border-r lg:border-[var(--line)] lg:shadow-none lg:last:border-r-0">
+      {children}
     </div>
   );
 }
@@ -126,15 +148,13 @@ export function CreditAgenda({
   }
 
   return (
-    <ol className="relative space-y-0">
+    <ol className="relative">
       {items.map((item, i) => {
         const days = daysBetween(today, item.date);
         const urgency = urgencyFromDays(days);
+        const kindLabel = item.kind === "corte" ? "Corte" : "Pago";
         return (
-          <li
-            key={item.id}
-            className="grid grid-cols-[1rem_1fr] gap-x-3"
-          >
+          <li key={item.id} className="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-x-3">
             <div className="relative flex flex-col items-center">
               <span
                 className={`mt-2 size-2.5 shrink-0 rounded-full ${urgencyDot[urgency]}`}
@@ -143,19 +163,21 @@ export function CreditAgenda({
                 <span className="mt-1 w-px flex-1 bg-[var(--line)]" />
               ) : null}
             </div>
-            <div className={`pb-5 ${i === items.length - 1 ? "pb-0" : ""}`}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <div>
-                  <p className="font-medium text-[var(--ink)]">
+            <div className={i === items.length - 1 ? "pb-0" : "pb-4 sm:pb-5"}>
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[var(--ink)]">
                     <Link
                       href={`/app/accounts/${item.accountId}`}
-                      className="hover:underline"
+                      className="truncate font-medium hover:underline"
                     >
                       {item.accountName}
                     </Link>
-                    <span className="mx-1.5 text-[var(--line)]">·</span>
-                    <span className="font-normal text-[var(--muted)]">
-                      {item.kind === "corte" ? "Corte" : "Fecha límite de pago"}
+                    <span className="text-[var(--line)]" aria-hidden>
+                      ·
+                    </span>
+                    <span className="text-sm font-normal text-[var(--muted)]">
+                      {kindLabel}
                     </span>
                   </p>
                   <p className={`mt-0.5 text-xs ${urgencyTone[urgency]}`}>
@@ -163,7 +185,7 @@ export function CreditAgenda({
                   </p>
                 </div>
                 {item.amountCents != null ? (
-                  <div className="text-right">
+                  <div className="shrink-0 sm:text-right">
                     <Mxn
                       cents={item.amountCents}
                       className="font-medium tabular-nums text-[var(--ink)]"
