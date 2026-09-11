@@ -23,6 +23,7 @@ describe("isNavActive", () => {
       "Avisos",
       "Asistente",
       "Agentes",
+      "Proyectos",
     ]);
   });
 });

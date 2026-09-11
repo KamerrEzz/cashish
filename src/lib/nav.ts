@@ -7,6 +7,7 @@ export const APP_NAV = [
   { href: "/app/reminders", label: "Avisos" },
   { href: "/app/ai", label: "Asistente" },
   { href: "/app/agents", label: "Agentes" },
+  { href: "/app/projects", label: "Proyectos" },
 ] as const;
 
 export type AppNavItem = (typeof APP_NAV)[number];

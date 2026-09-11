@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
 import { generateApiKey } from "@/lib/mcp/auth";
+import { requireProject } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export type CreatedKeyResult =
@@ -13,7 +13,7 @@ export type CreatedKeyResult =
 export async function createMcpApiKey(
   formData: FormData,
 ): Promise<CreatedKeyResult> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
   const parsed = z
     .object({
       name: z.string().min(1).max(60),
@@ -29,6 +29,7 @@ export async function createMcpApiKey(
     .from("mcp_api_keys")
     .insert({
       user_id: user.id,
+      project_id: project.id,
       name: parsed.data.name,
       key_prefix: generated.prefix,
       key_hash: generated.hash,
@@ -50,11 +51,12 @@ export async function createMcpApiKey(
 }
 
 export async function revokeMcpApiKey(id: string): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const { error } = await supabase
     .from("mcp_api_keys")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("project_id", project.id)
     .is("revoked_at", null);
 
   if (error) return { ok: false, error: error.message };

@@ -17,7 +17,7 @@ async function handle(req: Request) {
 
     const mcp = createMcpHandler(
       (server) => {
-        registerCashishTools(server, auth.userId);
+        registerCashishTools(server, auth.userId, auth.projectId);
       },
       {
         serverInfo: {

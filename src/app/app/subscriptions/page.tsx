@@ -1,18 +1,20 @@
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { PageHeader, Panel, Mxn } from "@/components/ui";
 import { SubscriptionManager } from "@/components/subscription-manager";
 
 export default async function SubscriptionsPage() {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const [{ data: accounts }, { data: subscriptions }] = await Promise.all([
     supabase
       .from("accounts")
       .select("*")
+      .eq("project_id", project.id)
       .eq("is_archived", false)
       .order("name"),
     supabase
       .from("subscriptions")
       .select("*, accounts(name)")
+      .eq("project_id", project.id)
       .order("next_billing_on"),
   ]);
 

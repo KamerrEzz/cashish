@@ -26,12 +26,13 @@ const isoDate = z
 
 const accountType = z.enum(["cash", "checking", "savings", "credit_card"]);
 
-async function getOwnedAccount(db: Admin, userId: string, accountId: string) {
+async function getOwnedAccount(db: Admin, userId: string, projectId: string, accountId: string) {
   const { data, error } = await db
     .from("accounts")
     .select("*")
     .eq("id", accountId)
     .eq("user_id", userId)
+    .eq("project_id", projectId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Cuenta no encontrada o no pertenece al usuario");
@@ -59,25 +60,25 @@ export function buildCashishTools(): CashishToolDef[] {
         supabase
           .from("accounts")
           .select("*")
-          .eq("user_id", ctx.userId)
+          .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
           .eq("is_archived", false),
-        supabase.from("credit_card_profiles").select("*").eq("user_id", ctx.userId),
+        supabase.from("credit_card_profiles").select("*").eq("user_id", ctx.userId).eq("project_id", ctx.projectId),
         supabase
           .from("statement_periods")
           .select("*")
-          .eq("user_id", ctx.userId)
+          .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
           .eq("status", "open"),
         supabase
           .from("subscriptions")
           .select("*, accounts(name)")
-          .eq("user_id", ctx.userId)
+          .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
           .eq("is_active", true)
           .order("next_billing_on")
           .limit(10),
         supabase
           .from("reminders")
           .select("*")
-          .eq("user_id", ctx.userId)
+          .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
           .eq("status", "pending")
           .eq("channel", "in_app")
           .order("due_on")
@@ -163,12 +164,12 @@ export function buildCashishTools(): CashishToolDef[] {
           supabase
             .from("statement_periods")
             .select("*, accounts(name)")
-            .eq("user_id", ctx.userId)
+            .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
             .in("status", ["open", "closed"]),
           supabase
             .from("subscriptions")
             .select("*, accounts(name)")
-            .eq("user_id", ctx.userId)
+            .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
             .eq("is_active", true)
             .gte("next_billing_on", today)
             .lte("next_billing_on", endStr)
@@ -176,7 +177,7 @@ export function buildCashishTools(): CashishToolDef[] {
           supabase
             .from("accounts")
             .select("id, name")
-            .eq("user_id", ctx.userId),
+            .eq("user_id", ctx.userId).eq("project_id", ctx.projectId),
         ]);
 
       const nameBy = new Map((accounts ?? []).map((a) => [a.id, a.name]));
@@ -253,7 +254,7 @@ export function buildCashishTools(): CashishToolDef[] {
       let query = ctx.db()
         .from("accounts")
         .select("*, credit_card_profiles(*)")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .order("created_at");
       if (!include_archived) query = query.eq("is_archived", false);
       const { data, error } = await query;
@@ -273,7 +274,7 @@ export function buildCashishTools(): CashishToolDef[] {
 
       const supabase = ctx.db();
       try {
-        const account = await getOwnedAccount(supabase, ctx.userId, account_id);
+        const account = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, account_id);
         const [{ data: profile }, { data: openPeriod }, { data: txs }, { data: periods }] =
           await Promise.all([
             account.type === "credit_card"
@@ -377,6 +378,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("accounts")
           .insert({
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             name: input.name,
             type: "credit_card",
             balance_cents: openingCents,
@@ -390,6 +392,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .insert({
             account_id: account.id,
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             credit_limit_cents: limitCents,
             statement_close_day: input.statement_close_day,
             payment_due_day: input.payment_due_day,
@@ -408,6 +411,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("statement_periods")
           .insert({
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id: account.id,
             opens_on: window.opensOn,
             closes_on: window.closesOn,
@@ -427,6 +431,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("accounts")
         .insert({
           user_id: ctx.userId,
+            project_id: ctx.projectId,
           name: input.name,
           type: input.type,
           balance_cents: openingCents,
@@ -455,7 +460,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("accounts")
         .update({ name, updated_at: new Date().toISOString() })
         .eq("id", account_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .select("*")
         .single();
       if (error) throw new Error(error.message);
@@ -475,7 +480,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("accounts")
         .update({ is_archived: true, updated_at: new Date().toISOString() })
         .eq("id", account_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .select("*")
         .single();
       if (error) throw new Error(error.message);
@@ -527,7 +532,7 @@ export function buildCashishTools(): CashishToolDef[] {
           updated_at: new Date().toISOString(),
         })
         .eq("account_id", input.account_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .select("*")
         .single();
       if (error) throw new Error(error.message);
@@ -554,7 +559,7 @@ export function buildCashishTools(): CashishToolDef[] {
       let query = ctx.db()
         .from("transactions")
         .select("*, accounts(name)")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .order("occurred_on", { ascending: false })
         .limit(limit);
       if (account_id) query = query.eq("account_id", account_id);
@@ -585,7 +590,7 @@ export function buildCashishTools(): CashishToolDef[] {
       let query = ctx.db()
         .from("transactions")
         .select("*, accounts(name)")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .or(
           `merchant.ilike.${pattern},description.ilike.${pattern},category.ilike.${pattern}`,
         )
@@ -610,7 +615,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("transactions")
         .select("*, accounts(name)")
         .eq("id", transaction_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Movimiento no encontrado");
@@ -647,10 +652,7 @@ export function buildCashishTools(): CashishToolDef[] {
 
       const supabase = ctx.db();
       try {
-        const account = await getOwnedAccount(
-          supabase,
-          ctx.userId,
-          input.account_id,
+        const account = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.account_id,
         );
 
         let statementPeriodId: string | null = null;
@@ -681,6 +683,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("transactions")
           .insert({
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id: account.id,
             type: input.type,
             amount_cents: amountCents,
@@ -728,7 +731,7 @@ export function buildCashishTools(): CashishToolDef[] {
       const { data, error } = await ctx.db()
         .from("transfers")
         .select("*")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .order("occurred_on", { ascending: false })
         .limit(limit);
       if (error) throw new Error(error.message);
@@ -765,15 +768,9 @@ export function buildCashishTools(): CashishToolDef[] {
 
       const supabase = ctx.db();
       try {
-        const fromAcc = await getOwnedAccount(
-          supabase,
-          ctx.userId,
-          input.from_account_id,
+        const fromAcc = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.from_account_id,
         );
-        const toAcc = await getOwnedAccount(
-          supabase,
-          ctx.userId,
-          input.to_account_id,
+        const toAcc = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.to_account_id,
         );
         if (fromAcc.type === "credit_card") {
           throw new Error("No se puede transferir desde una TDC en el MVP");
@@ -786,6 +783,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("transfers")
           .insert({
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             from_account_id: fromAcc.id,
             to_account_id: toAcc.id,
             amount_cents: amountCents,
@@ -831,6 +829,7 @@ export function buildCashishTools(): CashishToolDef[] {
         await supabase.from("transactions").insert([
           {
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id: fromAcc.id,
             type: "transfer",
             amount_cents: amountCents,
@@ -840,6 +839,7 @@ export function buildCashishTools(): CashishToolDef[] {
           },
           {
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id: toAcc.id,
             type: "transfer",
             amount_cents: amountCents,
@@ -889,15 +889,9 @@ export function buildCashishTools(): CashishToolDef[] {
         throw new Error(e instanceof Error ? e.message : "Monto inválido");
       }
       try {
-        const fromAcc = await getOwnedAccount(
-          supabase,
-          ctx.userId,
-          input.from_account_id,
+        const fromAcc = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.from_account_id,
         );
-        const toAcc = await getOwnedAccount(
-          supabase,
-          ctx.userId,
-          input.credit_card_account_id,
+        const toAcc = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.credit_card_account_id,
         );
         if (fromAcc.type === "credit_card") {
           throw new Error("No se puede pagar desde una TDC");
@@ -913,6 +907,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("transfers")
           .insert({
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             from_account_id: fromAcc.id,
             to_account_id: toAcc.id,
             amount_cents: amountCents,
@@ -951,6 +946,7 @@ export function buildCashishTools(): CashishToolDef[] {
         await supabase.from("transactions").insert([
           {
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id: fromAcc.id,
             type: "transfer",
             amount_cents: amountCents,
@@ -960,6 +956,7 @@ export function buildCashishTools(): CashishToolDef[] {
           },
           {
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id: toAcc.id,
             type: "transfer",
             amount_cents: amountCents,
@@ -999,7 +996,7 @@ export function buildCashishTools(): CashishToolDef[] {
       let query = ctx.db()
         .from("statement_periods")
         .select("*")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .eq("account_id", account_id)
         .order("closes_on", { ascending: false })
         .limit(limit);
@@ -1023,7 +1020,7 @@ export function buildCashishTools(): CashishToolDef[] {
       const { data: period, error } = await supabase
         .from("statement_periods")
         .select("*")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .eq("account_id", account_id)
         .eq("status", "open")
         .maybeSingle();
@@ -1068,7 +1065,7 @@ export function buildCashishTools(): CashishToolDef[] {
 
       const supabase = ctx.db();
       try {
-        const account = await getOwnedAccount(supabase, ctx.userId, account_id);
+        const account = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, account_id);
         if (account.type !== "credit_card") {
           throw new Error("Solo aplica a tarjetas de crédito");
         }
@@ -1077,7 +1074,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("credit_card_profiles")
           .select("*")
           .eq("account_id", account_id)
-          .eq("user_id", ctx.userId)
+          .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
           .single();
         if (!profile) throw new Error("Perfil de TDC no encontrado");
 
@@ -1121,6 +1118,7 @@ export function buildCashishTools(): CashishToolDef[] {
           .from("statement_periods")
           .insert({
             user_id: ctx.userId,
+            project_id: ctx.projectId,
             account_id,
             opens_on: next.opensOn,
             closes_on: next.closesOn,
@@ -1158,7 +1156,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("statement_periods")
         .update({ status: "paid" })
         .eq("id", statement_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .eq("status", "closed")
         .select("*")
         .single();
@@ -1183,7 +1181,7 @@ export function buildCashishTools(): CashishToolDef[] {
       let query = ctx.db()
         .from("subscriptions")
         .select("*, accounts(name)")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .order("next_billing_on");
       if (active_only) query = query.eq("is_active", true);
       if (account_id) query = query.eq("account_id", account_id);
@@ -1205,7 +1203,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("subscriptions")
         .select("*, accounts(name)")
         .eq("id", subscription_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Suscripción no encontrada");
@@ -1238,7 +1236,7 @@ export function buildCashishTools(): CashishToolDef[] {
         throw new Error(e instanceof Error ? e.message : "Monto inválido");
       }
       try {
-        await getOwnedAccount(ctx.db(), ctx.userId, input.account_id);
+        await getOwnedAccount(ctx.db(), ctx.userId, ctx.projectId, input.account_id);
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Cuenta inválida");
       }
@@ -1246,6 +1244,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("subscriptions")
         .insert({
           user_id: ctx.userId,
+            project_id: ctx.projectId,
           account_id: input.account_id,
           name: input.name,
           merchant: input.merchant,
@@ -1291,7 +1290,7 @@ export function buildCashishTools(): CashishToolDef[] {
       }
       if (input.account_id) {
         try {
-          await getOwnedAccount(ctx.db(), ctx.userId, input.account_id);
+          await getOwnedAccount(ctx.db(), ctx.userId, ctx.projectId, input.account_id);
           patch.account_id = input.account_id;
         } catch (e) {
           throw new Error(e instanceof Error ? e.message : "Cuenta inválida");
@@ -1309,7 +1308,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("subscriptions")
         .update(patch)
         .eq("id", input.subscription_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .select("*")
         .single();
       if (error) throw new Error(error.message);
@@ -1337,7 +1336,7 @@ export function buildCashishTools(): CashishToolDef[] {
           updated_at: new Date().toISOString(),
         })
         .eq("id", subscription_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .select("*")
         .single();
       if (error) throw new Error(error.message);
@@ -1364,7 +1363,7 @@ export function buildCashishTools(): CashishToolDef[] {
       let query = ctx.db()
         .from("reminders")
         .select("*")
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .order("due_on")
         .limit(limit);
       if (status !== "all") query = query.eq("status", status);
@@ -1387,7 +1386,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .from("reminders")
         .update({ status: "dismissed" })
         .eq("id", reminder_id)
-        .eq("user_id", ctx.userId)
+        .eq("user_id", ctx.userId).eq("project_id", ctx.projectId)
         .select("*")
         .single();
       if (error) throw new Error(error.message);

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { PageHeader } from "@/components/ui";
 import { AiChat } from "@/components/ai/ai-chat";
 import { AiKeyGate } from "@/components/ai/ai-key-gate";
@@ -12,13 +12,14 @@ export default async function AiConversationPage({
   params: Promise<{ conversationId: string }>;
 }) {
   const { conversationId } = await params;
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
   const meta = await getUserAiMeta(supabase);
 
   const [{ data: conversations }, { data: convo }] = await Promise.all([
     supabase
       .from("ai_conversations")
       .select("id, title, updated_at")
+      .eq("project_id", project.id)
       .order("updated_at", { ascending: false })
       .limit(40),
     supabase
@@ -26,6 +27,7 @@ export default async function AiConversationPage({
       .select("id, title")
       .eq("id", conversationId)
       .eq("user_id", user.id)
+      .eq("project_id", project.id)
       .maybeSingle(),
   ]);
 

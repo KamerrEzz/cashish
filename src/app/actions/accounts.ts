@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
 import { buildInitialStatementWindow } from "@/lib/credit-cycle";
 import { parseMxnInput } from "@/lib/money";
+import { requireProject } from "@/lib/projects";
 
 const accountTypeSchema = z.enum([
   "cash",
@@ -16,7 +16,7 @@ const accountTypeSchema = z.enum([
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function createAccount(formData: FormData): Promise<ActionResult> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
 
   const parsed = z
     .object({
@@ -84,6 +84,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
       .from("accounts")
       .insert({
         user_id: user.id,
+        project_id: project.id,
         name: data.name,
         type: "credit_card",
         balance_cents: openingCents,
@@ -100,6 +101,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
       .insert({
         account_id: account.id,
         user_id: user.id,
+        project_id: project.id,
         credit_limit_cents: limitCents,
         statement_close_day: data.statementCloseDay,
         payment_due_day: data.paymentDueDay,
@@ -119,6 +121,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
       .from("statement_periods")
       .insert({
         user_id: user.id,
+        project_id: project.id,
         account_id: account.id,
         opens_on: window.opensOn,
         closes_on: window.closesOn,
@@ -134,6 +137,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
   } else {
     const { error } = await supabase.from("accounts").insert({
       user_id: user.id,
+      project_id: project.id,
       name: data.name,
       type: data.type,
       balance_cents: openingCents,
@@ -149,11 +153,12 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
 }
 
 export async function archiveAccount(accountId: string): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const { error } = await supabase
     .from("accounts")
     .update({ is_archived: true })
-    .eq("id", accountId);
+    .eq("id", accountId)
+    .eq("project_id", project.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/app");
   revalidatePath("/app/accounts");

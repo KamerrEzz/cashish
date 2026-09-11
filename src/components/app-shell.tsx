@@ -2,8 +2,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
+import { ProjectSwitcher } from "@/components/project-switcher";
+import { requireProject } from "@/lib/projects";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
+  const { project, projects } = await requireProject();
+
   async function signOut() {
     "use server";
     const supabase = await createClient();
@@ -15,12 +19,22 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-full bg-[var(--wash)]">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
         <div className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link
-            href="/app"
-            className="shrink-0 font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--accent-deep)]"
-          >
-            Cashish
-          </Link>
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              href="/app"
+              className="shrink-0 font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--accent-deep)]"
+            >
+              Cashish
+            </Link>
+            <ProjectSwitcher
+              projects={projects.map((p) => ({
+                id: p.id,
+                name: p.name,
+                slug: p.slug,
+              }))}
+              activeId={project.id}
+            />
+          </div>
           <AppNav signOut={signOut} />
         </div>
       </header>

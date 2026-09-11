@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
 import { parseMxnInput } from "@/lib/money";
+import { requireProject } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export async function createTransaction(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
 
   const parsed = z
     .object({
@@ -51,6 +51,7 @@ export async function createTransaction(
     .from("accounts")
     .select("id, type, balance_cents")
     .eq("id", parsed.data.accountId)
+    .eq("project_id", project.id)
     .single();
 
   if (accountError || !account) {
@@ -63,6 +64,7 @@ export async function createTransaction(
       .from("statement_periods")
       .select("id")
       .eq("account_id", account.id)
+      .eq("project_id", project.id)
       .eq("status", "open")
       .maybeSingle();
     statementPeriodId = period?.id ?? null;
@@ -86,6 +88,7 @@ export async function createTransaction(
 
   const { error: txError } = await supabase.from("transactions").insert({
     user_id: user.id,
+    project_id: project.id,
     account_id: account.id,
     type: parsed.data.type,
     amount_cents: amountCents,
@@ -104,7 +107,8 @@ export async function createTransaction(
   const { error: balError } = await supabase
     .from("accounts")
     .update({ balance_cents: nextBalance, updated_at: new Date().toISOString() })
-    .eq("id", account.id);
+    .eq("id", account.id)
+    .eq("project_id", project.id);
 
   if (balError) {
     return { ok: false, error: balError.message };

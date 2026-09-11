@@ -1,4 +1,5 @@
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { runCashishChat, type ChatSseEvent } from "@/lib/ai/chat";
 import {
@@ -7,6 +8,10 @@ import {
   MissingAiKeyError,
 } from "@/lib/ai/user-key";
 import { compatibleClient } from "@/lib/ai/provider";
+import {
+  PROJECT_COOKIE,
+  resolveActiveProject,
+} from "@/lib/projects";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,6 +27,22 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return Response.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  const jar = await cookies();
+  const preferred = jar.get(PROJECT_COOKIE)?.value ?? null;
+  let projectId: string;
+  try {
+    const resolved = await resolveActiveProject(supabase, user.id, preferred);
+    projectId = resolved.project.id;
+  } catch (err) {
+    return Response.json(
+      {
+        error:
+          err instanceof Error ? err.message : "No se pudo resolver el proyecto",
+      },
+      { status: 400 },
+    );
   }
 
   const body = (await request.json()) as {
@@ -51,6 +72,7 @@ export async function POST(request: Request) {
       .select("id")
       .eq("id", conversationId)
       .eq("user_id", user.id)
+      .eq("project_id", projectId)
       .maybeSingle();
     if (!owned) {
       return Response.json({ error: "Conversación no encontrada" }, { status: 404 });
@@ -59,7 +81,7 @@ export async function POST(request: Request) {
     const title = message.slice(0, 80);
     const { data: convo, error } = await supabase
       .from("ai_conversations")
-      .insert({ user_id: user.id, title })
+      .insert({ user_id: user.id, project_id: projectId, title })
       .select("id")
       .single();
     if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -88,6 +110,7 @@ export async function POST(request: Request) {
   const client = compatibleClient(cred.apiKey, cred.baseUrl);
   const encoder = new TextEncoder();
   const convoId = conversationId;
+  const activeProjectId = projectId;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -100,6 +123,7 @@ export async function POST(request: Request) {
           client,
           cred,
           userId: user.id,
+          projectId: activeProjectId,
           history,
           onEvent: send,
         });
@@ -115,6 +139,7 @@ export async function POST(request: Request) {
           .eq("id", convoId);
         await supabase.from("ai_usage_events").insert({
           user_id: user.id,
+          project_id: activeProjectId,
           kind: "chat",
           model: cred.chatModel,
           prompt_tokens: result.promptTokens,

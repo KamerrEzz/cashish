@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
 import { todayLabelMx, daysBetween, relativeDayLabel } from "@/lib/dates";
 import {
@@ -31,7 +31,7 @@ function firstName(fullName: string | null | undefined, email: string | undefine
 }
 
 export default async function DashboardPage() {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
   const today = todayMexico();
 
   const [
@@ -46,23 +46,30 @@ export default async function DashboardPage() {
     supabase
       .from("accounts")
       .select("*")
+      .eq("project_id", project.id)
       .eq("is_archived", false)
       .order("created_at"),
-    supabase.from("credit_card_profiles").select("*"),
+    supabase
+      .from("credit_card_profiles")
+      .select("*")
+      .eq("project_id", project.id),
     supabase
       .from("statement_periods")
       .select("*")
+      .eq("project_id", project.id)
       .eq("status", "open")
       .order("closes_on"),
     supabase
       .from("subscriptions")
       .select("*, accounts(name)")
+      .eq("project_id", project.id)
       .eq("is_active", true)
       .order("next_billing_on")
       .limit(6),
     supabase
       .from("reminders")
       .select("*")
+      .eq("project_id", project.id)
       .eq("status", "pending")
       .eq("channel", "in_app")
       .order("due_on")

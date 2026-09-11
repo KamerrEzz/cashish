@@ -20,6 +20,7 @@ export function generateApiKey(): { raw: string; prefix: string; hash: string } 
 export type McpAuthContext = {
   userId: string;
   keyId: string;
+  projectId: string;
 };
 
 export async function resolveMcpBearer(
@@ -44,11 +45,15 @@ export async function resolveMcpBearer(
   }
 
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row?.user_id || !row?.key_id) {
+  if (!row?.user_id || !row?.key_id || !row?.project_id) {
     return null;
   }
 
-  return { userId: row.user_id, keyId: row.key_id };
+  return {
+    userId: row.user_id,
+    keyId: row.key_id,
+    projectId: row.project_id,
+  };
 }
 
 export function mcpUnauthorizedResponse(message = "Missing or invalid API key") {

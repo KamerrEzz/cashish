@@ -18,8 +18,12 @@ function fail(message: string) {
   };
 }
 
-export function registerCashishTools(server: McpServer, userId: string) {
-  const ctx = { userId, db: () => createServiceClient() };
+export function registerCashishTools(
+  server: McpServer,
+  userId: string,
+  projectId: string,
+) {
+  const ctx = { userId, projectId, db: () => createServiceClient() };
   for (const tool of buildCashishTools()) {
     server.registerTool(
       tool.name,

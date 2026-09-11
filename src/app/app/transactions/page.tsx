@@ -1,11 +1,12 @@
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { todayMexico } from "@/lib/credit-cycle";
 import { Mxn, PageHeader, Panel } from "@/components/ui";
 import { EmptyState, SectionTitle } from "@/components/empty-state";
 import { TransactionForms } from "@/components/transaction-forms";
 import { TransactionFilters } from "@/components/transaction-filters";
 import { TransactionLedger } from "@/components/transaction-ledger";
+import { ReceiptUpload } from "@/components/receipt-upload";
 import {
   TX_PAGE_SIZE,
   filtersToSearchParams,
@@ -20,7 +21,7 @@ export default async function TransactionsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
   const params = await searchParams;
   const filters = parseTransactionFilters(params);
   const today = todayMexico();
@@ -35,6 +36,7 @@ export default async function TransactionsPage({
       { count: "exact" },
     )
     .eq("user_id", user.id)
+    .eq("project_id", project.id)
     .gte("occurred_on", range.from)
     .lte("occurred_on", range.to)
     .order("occurred_on", { ascending: false })
@@ -45,6 +47,7 @@ export default async function TransactionsPage({
     .from("transactions")
     .select("amount_cents, type, transfer_id")
     .eq("user_id", user.id)
+    .eq("project_id", project.id)
     .gte("occurred_on", range.from)
     .lte("occurred_on", range.to)
     .limit(10000);
@@ -53,6 +56,7 @@ export default async function TransactionsPage({
     .from("transactions")
     .select("category")
     .eq("user_id", user.id)
+    .eq("project_id", project.id)
     .not("category", "is", null)
     .order("occurred_on", { ascending: false })
     .limit(300);
@@ -87,6 +91,7 @@ export default async function TransactionsPage({
       supabase
         .from("accounts")
         .select("*")
+        .eq("project_id", project.id)
         .eq("is_archived", false)
         .order("name"),
       listQuery,
@@ -231,6 +236,18 @@ export default async function TransactionsPage({
           )}
         </div>
       </details>
+
+      {(accounts ?? []).length > 0 ? (
+        <Panel>
+          <SectionTitle
+            title="Ticket / recibo"
+            subtitle="Sube foto o PDF · BYOK lee el borrador · tú confirmas"
+          />
+          <div className="mt-4">
+            <ReceiptUpload accounts={accounts ?? []} />
+          </div>
+        </Panel>
+      ) : null}
     </div>
   );
 }

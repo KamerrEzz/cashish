@@ -1,12 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Field, inputClass, btnPrimary, btnGhost, Panel } from "@/components/ui";
 
 type Mode = "magic" | "password";
 
+function safeNextPath(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/app";
+  return raw;
+}
+
 export function LoginForm() {
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next"));
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,12 +28,13 @@ export function LoginForm() {
     setError(null);
     setMessage(null);
     const supabase = createClient();
+    const callbackNext = encodeURIComponent(nextPath);
 
     if (mode === "magic") {
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${callbackNext}`,
         },
       });
       setLoading(false);
@@ -42,7 +51,7 @@ export function LoginForm() {
       password,
     });
     if (!signInError) {
-      window.location.href = "/app";
+      window.location.href = nextPath;
       return;
     }
 
@@ -50,7 +59,7 @@ export function LoginForm() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${callbackNext}`,
       },
     });
     setLoading(false);

@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
 import { daysBetween, formatDateMx } from "@/lib/dates";
 import { Mxn, PageHeader, Panel } from "@/components/ui";
@@ -29,7 +29,7 @@ function daysAgoIso(todayIso: string, days: number) {
 }
 
 export default async function AnalyticsPage() {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const today = todayMexico();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthBounds(today);
   const since30 = daysAgoIso(today, 30);
@@ -42,18 +42,35 @@ export default async function AnalyticsPage() {
     { data: txsMonth },
     { data: txs30 },
   ] = await Promise.all([
-    supabase.from("accounts").select("*").eq("is_archived", false),
-    supabase.from("credit_card_profiles").select("*"),
-    supabase.from("statement_periods").select("*").eq("status", "open"),
-    supabase.from("subscriptions").select("*").eq("is_active", true),
+    supabase
+      .from("accounts")
+      .select("*")
+      .eq("project_id", project.id)
+      .eq("is_archived", false),
+    supabase
+      .from("credit_card_profiles")
+      .select("*")
+      .eq("project_id", project.id),
+    supabase
+      .from("statement_periods")
+      .select("*")
+      .eq("project_id", project.id)
+      .eq("status", "open"),
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("project_id", project.id)
+      .eq("is_active", true),
     supabase
       .from("transactions")
       .select("type, amount_cents, occurred_on, merchant, category")
+      .eq("project_id", project.id)
       .gte("occurred_on", monthStart)
       .lte("occurred_on", monthEnd),
     supabase
       .from("transactions")
       .select("type, amount_cents, occurred_on, merchant, category")
+      .eq("project_id", project.id)
       .gte("occurred_on", since30)
       .lte("occurred_on", today),
   ]);

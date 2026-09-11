@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
 import { parseMxnInput } from "@/lib/money";
+import { requireProject } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export async function createSubscription(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, project } = await requireProject();
 
   const parsed = z
     .object({
@@ -44,6 +44,7 @@ export async function createSubscription(
 
   const { error } = await supabase.from("subscriptions").insert({
     user_id: user.id,
+    project_id: project.id,
     account_id: parsed.data.accountId,
     name: parsed.data.name,
     merchant: parsed.data.merchant,
@@ -64,11 +65,12 @@ export async function toggleSubscription(
   id: string,
   isActive: boolean,
 ): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const { error } = await supabase
     .from("subscriptions")
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("project_id", project.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/app/subscriptions");
   revalidatePath("/app");
@@ -76,11 +78,12 @@ export async function toggleSubscription(
 }
 
 export async function dismissReminder(id: string): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const { error } = await supabase
     .from("reminders")
     .update({ status: "dismissed" })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("project_id", project.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/app");
   return { ok: true };

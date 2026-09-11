@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { PageHeader, Panel } from "@/components/ui";
 import { AgentsPanel } from "@/components/agents-panel";
 import { AiKeyForm } from "@/components/ai/ai-key-form";
@@ -6,11 +6,12 @@ import { getUserAiMeta } from "@/lib/ai/user-key";
 import { SectionTitle } from "@/components/empty-state";
 
 export default async function AgentsPage() {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const [{ data: keys }, aiMeta] = await Promise.all([
     supabase
       .from("mcp_api_keys")
       .select("id, name, key_prefix, last_used_at, revoked_at, created_at")
+      .eq("project_id", project.id)
       .order("created_at", { ascending: false }),
     getUserAiMeta(supabase),
   ]);

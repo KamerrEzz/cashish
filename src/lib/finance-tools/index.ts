@@ -11,6 +11,7 @@ export function executeCashishTool(
   name: string,
   args: unknown,
   userId: string,
+  projectId: string,
 ): Promise<unknown> {
   const tool = buildCashishTools().find((t) => t.name === name);
   if (!tool) {
@@ -18,6 +19,7 @@ export function executeCashishTool(
   }
   const ctx: ToolCtx = {
     userId,
+    projectId,
     db: () => createServiceClient(),
   };
   return tool.execute(ctx, (args ?? {}) as Record<string, unknown>);

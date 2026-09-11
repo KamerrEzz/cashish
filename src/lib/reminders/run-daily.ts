@@ -8,6 +8,7 @@ const LEAD_DAYS = 3;
 
 type ReminderInsert = {
   user_id: string;
+  project_id: string;
   event_type: "statement_close" | "payment_due" | "subscription_charge";
   channel: "in_app" | "email";
   title: string;
@@ -67,6 +68,7 @@ export async function materializeAndSendReminders() {
       for (const channel of ["in_app", "email"] as const) {
         inserts.push({
           user_id: account.user_id,
+          project_id: period.project_id,
           event_type: "statement_close",
           channel,
           title: `Corte próximo: ${account.name}`,
@@ -95,6 +97,7 @@ export async function materializeAndSendReminders() {
       for (const channel of ["in_app", "email"] as const) {
         inserts.push({
           user_id: account.user_id,
+          project_id: period.project_id,
           event_type: "payment_due",
           channel,
           title: `Pago de tarjeta: ${account.name}`,
@@ -129,6 +132,7 @@ export async function materializeAndSendReminders() {
     for (const channel of ["in_app", "email"] as const) {
       inserts.push({
         user_id: sub.user_id,
+        project_id: sub.project_id,
         event_type: "subscription_charge",
         channel,
         title: `Cobro de ${sub.name}`,

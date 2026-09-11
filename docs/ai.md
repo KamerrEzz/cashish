@@ -23,6 +23,8 @@ Asistente in-app estilo Synapse: el usuario trae su clave (BYOK), cifrada en el 
 
 Next **no** usa `OPENAI_API_KEY` de producto.
 
+Conversaciones y tools del asistente usan el **proyecto activo** (`cashish_project_id`). Las claves MCP también van atadas a un `project_id`. Ver [`projects.md`](./projects.md).
+
 ## Checklist
 
 - [ ] `CASHISH_APP_SECRET` ≥32 en env (local + Vercel)

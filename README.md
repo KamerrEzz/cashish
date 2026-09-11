@@ -113,9 +113,13 @@ supabase/migrations/
 
 ## Roadmap breve
 
-1. Import CSV/OFX + sugerencias de suscripción  
-2. Cashflow “¿alcanzo a cubrir los recurrentes?”  
-3. MSI · envelopes · push · hogar compartido  
+1. ~~Proyectos (ledgers) + invitaciones + tickets MVP~~ (fase 2)  
+2. Import CSV/OFX + sugerencias de suscripción  
+3. Cashflow “¿alcanzo a cubrir los recurrentes?” + analíticas 2.5  
+4. MSI · envelopes · push  
+
+Ver también [`docs/ai.md`](docs/ai.md) y [`docs/projects.md`](docs/projects.md).  
+
 
 ## Licencia
 

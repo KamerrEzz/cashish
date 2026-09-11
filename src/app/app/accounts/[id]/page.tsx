@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
 import {
   Mxn,
@@ -27,12 +27,13 @@ export default async function AccountDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
 
   const { data: account } = await supabase
     .from("accounts")
     .select("*")
     .eq("id", id)
+    .eq("project_id", project.id)
     .maybeSingle();
 
   if (!account) notFound();
@@ -44,23 +45,27 @@ export default async function AccountDetailPage({
             .from("credit_card_profiles")
             .select("*")
             .eq("account_id", id)
+            .eq("project_id", project.id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
       supabase
         .from("statement_periods")
         .select("*")
         .eq("account_id", id)
+        .eq("project_id", project.id)
         .order("closes_on", { ascending: false })
         .limit(6),
       supabase
         .from("transactions")
         .select("*")
         .eq("account_id", id)
+        .eq("project_id", project.id)
         .order("occurred_on", { ascending: false })
         .limit(20),
       supabase
         .from("accounts")
         .select("id, name, type")
+        .eq("project_id", project.id)
         .eq("is_archived", false)
         .neq("type", "credit_card")
         .order("name"),

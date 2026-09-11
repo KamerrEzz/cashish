@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { dismissReminder } from "@/app/actions/subscriptions";
 import { SubmitButton } from "@/components/submit-button";
 import { PageHeader, Panel, btnGhost } from "@/components/ui";
@@ -14,11 +14,12 @@ const eventLabel: Record<string, string> = {
 };
 
 export default async function RemindersPage() {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const today = todayMexico();
   const { data: reminders } = await supabase
     .from("reminders")
     .select("*")
+    .eq("project_id", project.id)
     .order("due_on", { ascending: true })
     .limit(50);
 

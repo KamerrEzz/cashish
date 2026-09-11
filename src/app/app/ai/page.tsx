@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import { PageHeader } from "@/components/ui";
 import { AiChat } from "@/components/ai/ai-chat";
 import { AiKeyGate } from "@/components/ai/ai-key-gate";
@@ -6,12 +6,13 @@ import { AiSidebar } from "@/components/ai/ai-sidebar";
 import { getUserAiMeta } from "@/lib/ai/user-key";
 
 export default async function AiPage() {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const [meta, { data: conversations }] = await Promise.all([
     getUserAiMeta(supabase),
     supabase
       .from("ai_conversations")
       .select("id, title, updated_at")
+      .eq("project_id", project.id)
       .order("updated_at", { ascending: false })
       .limit(40),
   ]);

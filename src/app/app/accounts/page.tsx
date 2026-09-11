@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
+import { requireProject } from "@/lib/projects";
 import {
   Mxn,
   PageHeader,
@@ -11,16 +11,18 @@ import { availableCreditCents } from "@/lib/credit-cycle";
 import { UtilizationBar } from "@/components/dashboard/credit-ui";
 
 export default async function AccountsPage() {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const [{ data: accounts }, { data: periods }] = await Promise.all([
     supabase
       .from("accounts")
       .select("*, credit_card_profiles(*)")
+      .eq("project_id", project.id)
       .eq("is_archived", false)
       .order("created_at"),
     supabase
       .from("statement_periods")
       .select("account_id, closes_on, due_on, minimum_payment_cents")
+      .eq("project_id", project.id)
       .eq("status", "open"),
   ]);
 

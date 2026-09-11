@@ -24,6 +24,7 @@ export async function runCashishChat(opts: {
   client: OpenAI;
   cred: AiCred;
   userId: string;
+  projectId: string;
   history: ChatCompletionMessageParam[];
   onEvent: (event: ChatSseEvent) => void;
 }): Promise<{
@@ -122,6 +123,7 @@ export async function runCashishChat(opts: {
             tc.name,
             parsed,
             opts.userId,
+            opts.projectId,
           );
           resultText =
             typeof result === "string" ? result : JSON.stringify(result);

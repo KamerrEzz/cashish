@@ -17,6 +17,13 @@ type ReminderEventType =
   | "cashflow_shortfall";
 type ReminderChannel = "in_app" | "email";
 type ReminderStatus = "pending" | "sent" | "dismissed";
+type ProjectMemberRole = "owner" | "member";
+type ReceiptStatus =
+  | "uploaded"
+  | "parsing"
+  | "ready"
+  | "failed"
+  | "applied";
 
 export type Database = {
   public: {
@@ -45,10 +52,126 @@ export type Database = {
         };
         Relationships: [];
       };
+      projects: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_members: {
+        Row: {
+          project_id: string;
+          user_id: string;
+          role: ProjectMemberRole;
+          created_at: string;
+        };
+        Insert: {
+          project_id: string;
+          user_id: string;
+          role?: ProjectMemberRole;
+          created_at?: string;
+        };
+        Update: {
+          project_id?: string;
+          user_id?: string;
+          role?: ProjectMemberRole;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_members_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_invites: {
+        Row: {
+          id: string;
+          project_id: string;
+          email: string;
+          role: ProjectMemberRole;
+          token: string;
+          invited_by: string;
+          expires_at: string;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          email: string;
+          role?: ProjectMemberRole;
+          token: string;
+          invited_by: string;
+          expires_at: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          email?: string;
+          role?: ProjectMemberRole;
+          token?: string;
+          invited_by?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_invites_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       accounts: {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           name: string;
           type: AccountType;
           currency: string;
@@ -60,6 +183,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           name: string;
           type: AccountType;
           currency?: string;
@@ -71,6 +195,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           name?: string;
           type?: AccountType;
           currency?: string;
@@ -87,12 +212,20 @@ export type Database = {
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "accounts_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
         ];
       };
       credit_card_profiles: {
         Row: {
           account_id: string;
           user_id: string;
+          project_id: string;
           credit_limit_cents: number;
           statement_close_day: number;
           payment_due_day: number;
@@ -103,6 +236,7 @@ export type Database = {
         Insert: {
           account_id: string;
           user_id: string;
+          project_id: string;
           credit_limit_cents: number;
           statement_close_day: number;
           payment_due_day: number;
@@ -113,6 +247,7 @@ export type Database = {
         Update: {
           account_id?: string;
           user_id?: string;
+          project_id?: string;
           credit_limit_cents?: number;
           statement_close_day?: number;
           payment_due_day?: number;
@@ -134,6 +269,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           account_id: string;
           opens_on: string;
           closes_on: string;
@@ -148,6 +284,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           account_id: string;
           opens_on: string;
           closes_on: string;
@@ -162,6 +299,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           account_id?: string;
           opens_on?: string;
           closes_on?: string;
@@ -187,6 +325,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           account_id: string;
           type: TransactionType;
           amount_cents: number;
@@ -203,6 +342,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           account_id: string;
           type: TransactionType;
           amount_cents: number;
@@ -219,6 +359,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           account_id?: string;
           type?: TransactionType;
           amount_cents?: number;
@@ -246,6 +387,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           from_account_id: string;
           to_account_id: string;
           amount_cents: number;
@@ -257,6 +399,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           from_account_id: string;
           to_account_id: string;
           amount_cents: number;
@@ -268,6 +411,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           from_account_id?: string;
           to_account_id?: string;
           amount_cents?: number;
@@ -282,6 +426,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           account_id: string;
           name: string;
           merchant: string;
@@ -297,6 +442,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           account_id: string;
           name: string;
           merchant: string;
@@ -312,6 +458,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           account_id?: string;
           name?: string;
           merchant?: string;
@@ -338,6 +485,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           event_type: ReminderEventType;
           channel: ReminderChannel;
           title: string;
@@ -354,6 +502,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           event_type: ReminderEventType;
           channel: ReminderChannel;
           title: string;
@@ -370,6 +519,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           event_type?: ReminderEventType;
           channel?: ReminderChannel;
           title?: string;
@@ -397,6 +547,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           name: string;
           key_prefix: string;
           key_hash: string;
@@ -407,6 +558,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           name: string;
           key_prefix: string;
           key_hash: string;
@@ -417,6 +569,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           name?: string;
           key_prefix?: string;
           key_hash?: string;
@@ -430,6 +583,56 @@ export type Database = {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      receipts: {
+        Row: {
+          id: string;
+          project_id: string;
+          uploaded_by: string;
+          storage_path: string;
+          mime: string;
+          status: ReceiptStatus;
+          parsed: Json | null;
+          error: string | null;
+          transaction_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          uploaded_by: string;
+          storage_path: string;
+          mime: string;
+          status?: ReceiptStatus;
+          parsed?: Json | null;
+          error?: string | null;
+          transaction_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          uploaded_by?: string;
+          storage_path?: string;
+          mime?: string;
+          status?: ReceiptStatus;
+          parsed?: Json | null;
+          error?: string | null;
+          transaction_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "receipts_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
             referencedColumns: ["id"];
           },
         ];
@@ -479,6 +682,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           title: string | null;
           created_at: string;
           updated_at: string;
@@ -486,6 +690,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           title?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -493,6 +698,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           title?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -549,6 +755,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string;
           kind: string;
           model: string | null;
           prompt_tokens: number;
@@ -559,6 +766,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id: string;
           kind?: string;
           model?: string | null;
           prompt_tokens?: number;
@@ -569,6 +777,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          project_id?: string;
           kind?: string;
           model?: string | null;
           prompt_tokens?: number;
@@ -608,7 +817,30 @@ export type Database = {
       };
       mcp_resolve_api_key: {
         Args: { p_key_hash: string };
-        Returns: { user_id: string; key_id: string }[];
+        Returns: { user_id: string; key_id: string; project_id: string }[];
+      };
+      is_project_member: {
+        Args: { p_project_id: string };
+        Returns: boolean;
+      };
+      is_project_owner: {
+        Args: { p_project_id: string };
+        Returns: boolean;
+      };
+      accept_project_invite: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      preview_project_invite: {
+        Args: { p_token: string };
+        Returns: {
+          project_id: string;
+          project_name: string;
+          email: string;
+          role: ProjectMemberRole;
+          expires_at: string;
+          accepted_at: string | null;
+        }[];
       };
       save_own_ai_credential: {
         Args: {
@@ -647,6 +879,8 @@ export type Database = {
       reminder_event_type: ReminderEventType;
       reminder_channel: ReminderChannel;
       reminder_status: ReminderStatus;
+      project_member_role: ProjectMemberRole;
+      receipt_status: ReceiptStatus;
     };
     CompositeTypes: Record<string, never>;
   };

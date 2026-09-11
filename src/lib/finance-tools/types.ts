@@ -6,6 +6,7 @@ export type Admin = SupabaseClient<Database>;
 
 export type ToolCtx = {
   userId: string;
+  projectId: string;
   db: () => Admin;
 };
 

@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
 import { parseMxnInput } from "@/lib/money";
+import { requireProject } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export async function createLinkedTransfer(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase } = await requireProject();
 
   const parsed = z
     .object({
@@ -62,7 +62,7 @@ export async function createLinkedTransfer(
 export async function closeStatementPeriod(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase } = await requireProject();
 
   const accountId = String(formData.get("accountId") ?? "");
   const minRaw = formData.get("minimumPayment");
@@ -93,11 +93,12 @@ export async function markStatementPaid(
   statementId: string,
   accountId: string,
 ): Promise<ActionResult> {
-  const { supabase } = await requireUser();
+  const { supabase, project } = await requireProject();
   const { error } = await supabase
     .from("statement_periods")
     .update({ status: "paid" })
     .eq("id", statementId)
+    .eq("project_id", project.id)
     .eq("status", "closed");
 
   if (error) return { ok: false, error: error.message };
