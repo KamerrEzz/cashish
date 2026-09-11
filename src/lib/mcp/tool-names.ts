@@ -1,4 +1,4 @@
-/** Canonical MCP tool list for Cashish agents. */
+/** Canonical MCP / assistant tool list for Cashish agents (static for client bundles). */
 export const TOOL_NAMES = [
   "cashish_dashboard",
   "cashish_upcoming_events",
@@ -28,3 +28,5 @@ export const TOOL_NAMES = [
   "cashish_list_reminders",
   "cashish_dismiss_reminder",
 ] as const;
+
+export type ToolName = (typeof TOOL_NAMES)[number];
