@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Field, inputClass, btnPrimary, Panel } from "@/components/ui";
+import { Field, inputClass, btnPrimary, btnGhost, Panel } from "@/components/ui";
+
+type Mode = "magic" | "password";
 
 export function LoginForm() {
+  const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,18 +20,47 @@ export function LoginForm() {
     setError(null);
     setMessage(null);
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithOtp({
+
+    if (mode === "magic") {
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      setLoading(false);
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+      setMessage("Revisa tu correo: te enviamos un enlace mágico para entrar.");
+      return;
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
+      password,
+    });
+    if (!signInError) {
+      window.location.href = "/app";
+      return;
+    }
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     setLoading(false);
-    if (authError) {
-      setError(authError.message);
+    if (signUpError) {
+      setError(signInError.message || signUpError.message);
       return;
     }
-    setMessage("Revisa tu correo: te enviamos un enlace mágico para entrar.");
+    setMessage(
+      "Cuenta creada. Si pide confirmar correo, revisa tu inbox; si no, recarga e intenta entrar de nuevo.",
+    );
   }
 
   return (
@@ -39,6 +72,22 @@ export function LoginForm() {
         Finanzas personales con tarjetas de crédito de verdad: corte, pago y
         suscripciones.
       </p>
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          className={mode === "password" ? btnPrimary : btnGhost}
+          onClick={() => setMode("password")}
+        >
+          Email + contraseña
+        </button>
+        <button
+          type="button"
+          className={mode === "magic" ? btnPrimary : btnGhost}
+          onClick={() => setMode("magic")}
+        >
+          Enlace mágico
+        </button>
+      </div>
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <Field label="Correo">
           <input
@@ -50,8 +99,25 @@ export function LoginForm() {
             placeholder="tu@email.com"
           />
         </Field>
+        {mode === "password" ? (
+          <Field label="Contraseña (mín. 6)">
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputClass}
+              placeholder="••••••••"
+            />
+          </Field>
+        ) : null}
         <button type="submit" className={btnPrimary} disabled={loading}>
-          {loading ? "Enviando…" : "Entrar con enlace mágico"}
+          {loading
+            ? "Espera…"
+            : mode === "magic"
+              ? "Enviar enlace"
+              : "Entrar / registrarme"}
         </button>
       </form>
       {message ? (
