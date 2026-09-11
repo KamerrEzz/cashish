@@ -38,7 +38,7 @@ export function TransactionForms({ accounts }: { accounts: Account[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(
           [
             ["expense", "Gasto"],
@@ -62,7 +62,15 @@ export function TransactionForms({ accounts }: { accounts: Account[] }) {
       </div>
 
       <form action={onTx} className="space-y-3">
-        <input type="hidden" name="occurredOn" value={todayMexico()} />
+        <Field label="Fecha">
+          <input
+            type="date"
+            name="occurredOn"
+            required
+            className={inputClass}
+            defaultValue={todayMexico()}
+          />
+        </Field>
         {mode === "transfer" ? (
           <>
             <Field label="Desde (débito/efectivo)">
@@ -114,7 +122,9 @@ export function TransactionForms({ accounts }: { accounts: Account[] }) {
             </Field>
           </>
         ) : null}
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
+        {error ? (
+          <p className="text-sm text-[var(--danger-ink)]">{error}</p>
+        ) : null}
         {ok ? (
           <p className="text-sm text-[var(--accent-deep)]">Guardado.</p>
         ) : null}

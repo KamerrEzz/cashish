@@ -1,61 +1,224 @@
+import { Suspense } from "react";
 import { requireUser } from "@/lib/auth";
+import { todayMexico } from "@/lib/credit-cycle";
 import { Mxn, PageHeader, Panel } from "@/components/ui";
-import { EmptyState, MoneyTone, SectionTitle } from "@/components/empty-state";
+import { EmptyState, SectionTitle } from "@/components/empty-state";
 import { TransactionForms } from "@/components/transaction-forms";
+import { TransactionFilters } from "@/components/transaction-filters";
+import { TransactionLedger } from "@/components/transaction-ledger";
+import {
+  TX_PAGE_SIZE,
+  filtersToSearchParams,
+  parseTransactionFilters,
+  resolveDateRange,
+} from "@/lib/transactions-query";
 
-export default async function TransactionsPage() {
-  const { supabase } = await requireUser();
-  const [{ data: accounts }, { data: txs }] = await Promise.all([
-    supabase
-      .from("accounts")
-      .select("*")
-      .eq("is_archived", false)
-      .order("name"),
-    supabase
-      .from("transactions")
-      .select("*, accounts(name)")
-      .order("occurred_on", { ascending: false })
-      .limit(50),
-  ]);
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-  const recent = txs ?? [];
-  const income = recent
-    .filter((t) => t.type === "income")
-    .reduce((s, t) => s + t.amount_cents, 0);
-  const expense = recent
-    .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount_cents, 0);
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const { supabase, user } = await requireUser();
+  const params = await searchParams;
+  const filters = parseTransactionFilters(params);
+  const today = todayMexico();
+  const range = resolveDateRange(filters, today);
+  const fromIdx = (filters.page - 1) * TX_PAGE_SIZE;
+  const toIdx = fromIdx + TX_PAGE_SIZE - 1;
+
+  let listQuery = supabase
+    .from("transactions")
+    .select(
+      "id, type, amount_cents, merchant, description, category, occurred_on, transfer_id, accounts(name)",
+      { count: "exact" },
+    )
+    .eq("user_id", user.id)
+    .gte("occurred_on", range.from)
+    .lte("occurred_on", range.to)
+    .order("occurred_on", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(fromIdx, toIdx);
+
+  let summaryQuery = supabase
+    .from("transactions")
+    .select("amount_cents, type, transfer_id")
+    .eq("user_id", user.id)
+    .gte("occurred_on", range.from)
+    .lte("occurred_on", range.to)
+    .limit(10000);
+
+  let categoriesQuery = supabase
+    .from("transactions")
+    .select("category")
+    .eq("user_id", user.id)
+    .not("category", "is", null)
+    .order("occurred_on", { ascending: false })
+    .limit(300);
+
+  if (filters.accountId) {
+    listQuery = listQuery.eq("account_id", filters.accountId);
+    summaryQuery = summaryQuery.eq("account_id", filters.accountId);
+  }
+  if (filters.category) {
+    listQuery = listQuery.ilike("category", `%${filters.category}%`);
+    summaryQuery = summaryQuery.ilike("category", `%${filters.category}%`);
+  }
+  if (filters.type === "expense") {
+    listQuery = listQuery.eq("type", "expense").is("transfer_id", null);
+    summaryQuery = summaryQuery.eq("type", "expense").is("transfer_id", null);
+  } else if (filters.type === "income") {
+    listQuery = listQuery.eq("type", "income").is("transfer_id", null);
+    summaryQuery = summaryQuery.eq("type", "income").is("transfer_id", null);
+  } else if (filters.type === "transfer") {
+    listQuery = listQuery.not("transfer_id", "is", null);
+    summaryQuery = summaryQuery.not("transfer_id", "is", null);
+  }
+  if (filters.q) {
+    const q = filters.q.replace(/[%_,]/g, "");
+    const or = `merchant.ilike.%${q}%,description.ilike.%${q}%,category.ilike.%${q}%`;
+    listQuery = listQuery.or(or);
+    summaryQuery = summaryQuery.or(or);
+  }
+
+  const [{ data: accounts }, listResult, summaryResult, categoriesResult] =
+    await Promise.all([
+      supabase
+        .from("accounts")
+        .select("*")
+        .eq("is_archived", false)
+        .order("name"),
+      listQuery,
+      summaryQuery,
+      categoriesQuery,
+    ]);
+
+  const txs = listResult.data ?? [];
+  const total = listResult.count ?? 0;
+
+  let income = 0;
+  let expense = 0;
+  for (const row of summaryResult.data ?? []) {
+    if (row.transfer_id) continue;
+    if (row.type === "income") income += row.amount_cents;
+    else if (row.type === "expense") expense += row.amount_cents;
+  }
+
+  const categories = [
+    ...new Set(
+      (categoriesResult.data ?? [])
+        .map((r) => r.category?.trim())
+        .filter((c): c is string => Boolean(c)),
+    ),
+  ].slice(0, 12);
+
+  const ledgerRows = txs.map((tx) => {
+    const accountName =
+      tx.accounts && typeof tx.accounts === "object" && "name" in tx.accounts
+        ? String((tx.accounts as { name: string }).name)
+        : "—";
+    return {
+      id: tx.id,
+      type: tx.type,
+      amount_cents: tx.amount_cents,
+      merchant: tx.merchant,
+      description: tx.description,
+      category: tx.category,
+      occurred_on: tx.occurred_on,
+      transfer_id: tx.transfer_id,
+      account_name: accountName,
+    };
+  });
+
+  const baseQuery = filtersToSearchParams({
+    q: filters.q,
+    type: filters.type,
+    accountId: filters.accountId,
+    category: filters.category,
+    from: range.from,
+    to: range.to,
+  }).toString();
+
+  const rangeLabel = `${range.from} → ${range.to}`;
 
   return (
-    <div className="dash-enter space-y-8">
+    <div className="dash-enter space-y-6 sm:space-y-8">
       <PageHeader
         title="Movimientos"
-        subtitle="El diario de tu dinero: ingresos, gastos y transferencias."
+        subtitle="Ledger filtrable: busca, pagina y exporta CSV para tu contador."
       />
 
-      {(accounts ?? []).length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Panel className="!p-4">
-            <p className="text-xs text-[var(--muted)]">Ingresos (lista)</p>
-            <p className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--positive)] tabular-nums">
-              <Mxn cents={income} />
-            </p>
-          </Panel>
-          <Panel className="!p-4">
-            <p className="text-xs text-[var(--muted)]">Gastos (lista)</p>
-            <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums">
-              <Mxn cents={expense} />
-            </p>
-          </Panel>
-        </div>
-      ) : null}
+      <Suspense
+        fallback={
+          <div className="h-28 animate-pulse rounded-2xl border border-[var(--line)] bg-[var(--surface)]" />
+        }
+      >
+        <TransactionFilters
+          accounts={accounts ?? []}
+          categories={categories}
+          defaults={{ from: range.from, to: range.to }}
+        />
+      </Suspense>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Panel className="!p-4">
+          <p className="text-xs text-[var(--muted)]">Ingresos (filtro)</p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums text-[var(--positive)]">
+            <Mxn cents={income} />
+          </p>
+        </Panel>
+        <Panel className="!p-4">
+          <p className="text-xs text-[var(--muted)]">Gastos (filtro)</p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums">
+            <Mxn cents={expense} />
+          </p>
+        </Panel>
+        <Panel className="!p-4">
+          <p className="text-xs text-[var(--muted)]">Periodo</p>
+          <p className="mt-1 text-sm font-medium tabular-nums text-[var(--ink)]">
+            {rangeLabel}
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            {total} movimiento{total === 1 ? "" : "s"}
+          </p>
+        </Panel>
+      </div>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
           <SectionTitle
-            title="Registrar"
-            subtitle="Una captura limpia, sin fricción"
+            title="Ledger"
+            subtitle="Tabla densa · 25 por página · exporta el mismo filtro"
           />
+        </div>
+        <TransactionLedger
+          rows={ledgerRows}
+          total={total}
+          page={filters.page}
+          pageSize={TX_PAGE_SIZE}
+          baseQuery={baseQuery}
+        />
+      </section>
+
+      <details className="group rounded-2xl border border-[var(--line)] bg-[var(--surface)] open:shadow-none">
+        <summary className="cursor-pointer list-none px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-[var(--ink)]">Registrar movimiento</p>
+              <p className="text-xs text-[var(--muted)]">
+                Captura colapsada para no competir con el ledger
+              </p>
+            </div>
+            <span className="text-sm text-[var(--accent)] group-open:hidden">
+              Abrir
+            </span>
+            <span className="hidden text-sm text-[var(--muted)] group-open:inline">
+              Cerrar
+            </span>
+          </div>
+        </summary>
+        <div className="border-t border-[var(--line)] px-4 py-4 sm:px-5">
           {(accounts ?? []).length === 0 ? (
             <EmptyState
               title="Necesitas una cuenta"
@@ -66,47 +229,8 @@ export default async function TransactionsPage() {
           ) : (
             <TransactionForms accounts={accounts ?? []} />
           )}
-        </Panel>
-        <Panel>
-          <SectionTitle
-            title="Recientes"
-            subtitle="Últimos movimientos capturados"
-          />
-          {recent.length === 0 ? (
-            <EmptyState
-              title="Sin movimientos"
-              body="Cuando registres un gasto o ingreso, aparecerá aquí con fecha y cuenta."
-            />
-          ) : (
-            <ul className="divide-y divide-[var(--line)]">
-              {recent.map((tx) => {
-                const accountName =
-                  tx.accounts &&
-                  typeof tx.accounts === "object" &&
-                  "name" in tx.accounts
-                    ? String((tx.accounts as { name: string }).name)
-                    : "—";
-                return (
-                  <li
-                    key={tx.id}
-                    className="flex justify-between gap-3 py-3 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--ink)]">
-                        {tx.merchant || tx.description || tx.type}
-                      </p>
-                      <p className="text-xs text-[var(--muted)]">
-                        {tx.occurred_on} · {accountName} · {tx.type}
-                      </p>
-                    </div>
-                    <MoneyTone cents={tx.amount_cents} type={tx.type} />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
