@@ -96,7 +96,9 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .dash-enter > * {
-    animation: dash-rise 0.45s ease both;
+    /* No fill-mode "both" — it leaves opacity:0 if the animation never runs
+       (common on soft navigations / double redirects). */
+    animation: dash-rise 0.4s ease-out;
   }
   .dash-enter > *:nth-child(1) {
     animation-delay: 0.02s;

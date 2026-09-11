@@ -55,7 +55,9 @@ export async function createProject(
   await setActiveProjectCookie(projectId);
   revalidatePath("/app");
   revalidatePath("/app/projects");
-  redirect(`/app/projects/${projectId}`);
+  revalidatePath("/app/onboarding");
+  // New ledgers have zero accounts → land on setup (avoid project→gate double redirect).
+  redirect("/app/onboarding");
 }
 
 export async function switchProject(formData: FormData): Promise<void> {

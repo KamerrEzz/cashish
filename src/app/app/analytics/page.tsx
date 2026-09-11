@@ -9,6 +9,18 @@ import {
   SummaryStrip,
   UtilizationBar,
 } from "@/components/dashboard/credit-ui";
+import {
+  CashflowAreaChart,
+  CategoryPieChart,
+  IncomeExpenseCompareChart,
+  MerchantBarChart,
+} from "@/components/analytics/charts";
+import {
+  buildCategoryBreakdown,
+  buildDailyFlow,
+  buildMerchantBars,
+  monthCompare,
+} from "@/lib/analytics/series";
 import Link from "next/link";
 
 function monthBounds(todayIso: string) {
@@ -16,7 +28,22 @@ function monthBounds(todayIso: string) {
   const start = `${y}-${String(m).padStart(2, "0")}-01`;
   const endDate = new Date(y, m, 0);
   const end = `${y}-${String(m).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
-  return { start, end, label: formatDateMx(start, { month: "long", year: "numeric" }) };
+  return {
+    start,
+    end,
+    label: formatDateMx(start, { month: "long", year: "numeric" }),
+  };
+}
+
+function prevMonthBounds(todayIso: string) {
+  const [y, m] = todayIso.split("-").map(Number);
+  const d = new Date(y, m - 2, 1);
+  const py = d.getFullYear();
+  const pm = d.getMonth() + 1;
+  const start = `${py}-${String(pm).padStart(2, "0")}-01`;
+  const endDate = new Date(py, pm, 0);
+  const end = `${py}-${String(pm).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+  return { start, end };
 }
 
 function daysAgoIso(todayIso: string, days: number) {
@@ -31,8 +58,11 @@ function daysAgoIso(todayIso: string, days: number) {
 export default async function AnalyticsPage() {
   const { supabase, user, project } = await requireProject();
   const today = todayMexico();
-  const { start: monthStart, end: monthEnd, label: monthLabel } = monthBounds(today);
+  const { start: monthStart, end: monthEnd, label: monthLabel } =
+    monthBounds(today);
+  const prev = prevMonthBounds(today);
   const since30 = daysAgoIso(today, 30);
+  const since90 = daysAgoIso(today, 90);
 
   const [
     { data: accounts },
@@ -40,7 +70,9 @@ export default async function AnalyticsPage() {
     { data: openPeriods },
     { data: subscriptions },
     { data: txsMonth },
+    { data: txsPrevMonth },
     { data: txs30 },
+    { data: txs90 },
     { data: ownedMemberships },
   ] = await Promise.all([
     supabase
@@ -64,15 +96,27 @@ export default async function AnalyticsPage() {
       .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("type, amount_cents, occurred_on, merchant, category")
+      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
       .eq("project_id", project.id)
       .gte("occurred_on", monthStart)
       .lte("occurred_on", monthEnd),
     supabase
       .from("transactions")
-      .select("type, amount_cents, occurred_on, merchant, category")
+      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
+      .eq("project_id", project.id)
+      .gte("occurred_on", prev.start)
+      .lte("occurred_on", prev.end),
+    supabase
+      .from("transactions")
+      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
       .eq("project_id", project.id)
       .gte("occurred_on", since30)
+      .lte("occurred_on", today),
+    supabase
+      .from("transactions")
+      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
+      .eq("project_id", project.id)
+      .gte("occurred_on", since90)
       .lte("occurred_on", today),
     supabase
       .from("project_members")
@@ -105,7 +149,13 @@ export default async function AnalyticsPage() {
             ownedProjectIds.map((p) => p.id),
           )
           .eq("is_archived", false)
-      : { data: [] as Array<{ project_id: string; type: string; balance_cents: number }> };
+      : {
+          data: [] as Array<{
+            project_id: string;
+            type: string;
+            balance_cents: number;
+          }>,
+        };
 
   let ownerLiquid = 0;
   let ownerDebt = 0;
@@ -116,8 +166,12 @@ export default async function AnalyticsPage() {
 
   const liquid = (accounts ?? []).filter((a) => a.type !== "credit_card");
   const cards = (accounts ?? []).filter((a) => a.type === "credit_card");
-  const profileByAccount = new Map((profiles ?? []).map((p) => [p.account_id, p]));
-  const periodByAccount = new Map((openPeriods ?? []).map((p) => [p.account_id, p]));
+  const profileByAccount = new Map(
+    (profiles ?? []).map((p) => [p.account_id, p]),
+  );
+  const periodByAccount = new Map(
+    (openPeriods ?? []).map((p) => [p.account_id, p]),
+  );
 
   const liquidTotal = liquid.reduce((s, a) => s + a.balance_cents, 0);
   const debtTotal = cards.reduce((s, a) => s + a.balance_cents, 0);
@@ -128,50 +182,58 @@ export default async function AnalyticsPage() {
   );
   const availableTotal = cards.reduce((s, a) => {
     const p = profileByAccount.get(a.id);
-    return p ? s + availableCreditCents(p.credit_limit_cents, a.balance_cents) : s;
+    return p
+      ? s + availableCreditCents(p.credit_limit_cents, a.balance_cents)
+      : s;
   }, 0);
 
   const subMonthly = (subscriptions ?? []).reduce((s, sub) => {
     if (sub.frequency === "yearly") return s + Math.round(sub.amount_cents / 12);
-    if (sub.frequency === "weekly") return s + Math.round(sub.amount_cents * 4.33);
+    if (sub.frequency === "weekly")
+      return s + Math.round(sub.amount_cents * 4.33);
     return s + sub.amount_cents;
   }, 0);
 
   const minPayments = cards.reduce((s, a) => {
     const period = periodByAccount.get(a.id);
     const profile = profileByAccount.get(a.id);
-    return s + (period?.minimum_payment_cents || profile?.minimum_payment_cents || 0);
+    return (
+      s +
+      (period?.minimum_payment_cents || profile?.minimum_payment_cents || 0)
+    );
   }, 0);
 
   const incomeMonth = (txsMonth ?? [])
-    .filter((t) => t.type === "income")
+    .filter((t) => t.type === "income" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
   const expenseMonth = (txsMonth ?? [])
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && !t.transfer_id)
+    .reduce((s, t) => s + t.amount_cents, 0);
+  const incomePrev = (txsPrevMonth ?? [])
+    .filter((t) => t.type === "income" && !t.transfer_id)
+    .reduce((s, t) => s + t.amount_cents, 0);
+  const expensePrev = (txsPrevMonth ?? [])
+    .filter((t) => t.type === "expense" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
   const income30 = (txs30 ?? [])
-    .filter((t) => t.type === "income")
+    .filter((t) => t.type === "income" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
   const expense30 = (txs30 ?? [])
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
 
-  const byMerchant = new Map<string, number>();
-  for (const t of txs30 ?? []) {
-    if (t.type !== "expense") continue;
-    const key = (t.merchant || t.category || "Sin nombre").trim() || "Sin nombre";
-    byMerchant.set(key, (byMerchant.get(key) ?? 0) + t.amount_cents);
-  }
-  const topMerchants = [...byMerchant.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
+  const expenseCompare = monthCompare(expenseMonth, expensePrev);
+  const daily90 = buildDailyFlow(txs90 ?? [], since90, today);
+  const categories = buildCategoryBreakdown(txs30 ?? []);
+  const merchants = buildMerchantBars(txs30 ?? [], 8);
 
   const utilizationPct =
     limitTotal > 0 ? Math.round((debtTotal / limitTotal) * 100) : 0;
-
   const runwayDays =
-    expense30 > 0
-      ? Math.round((liquidTotal / (expense30 / 30)) )
+    expense30 > 0 ? Math.round(liquidTotal / (expense30 / 30)) : null;
+  const savingsRate =
+    incomeMonth > 0
+      ? Math.round(((incomeMonth - expenseMonth) / incomeMonth) * 100)
       : null;
 
   const dueSoon = cards
@@ -182,7 +244,10 @@ export default async function AnalyticsPage() {
         name: a.name,
         due: period.due_on,
         days: daysBetween(today, period.due_on),
-        min: period.minimum_payment_cents || profileByAccount.get(a.id)?.minimum_payment_cents || 0,
+        min:
+          period.minimum_payment_cents ||
+          profileByAccount.get(a.id)?.minimum_payment_cents ||
+          0,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x != null)
@@ -195,7 +260,7 @@ export default async function AnalyticsPage() {
     );
   } else if (liquidTotal > 0 && debtTotal > 0) {
     insights.push(
-      `Con la liquidez actual cubres ${(liquidTotal / Math.max(debtTotal, 1) * 100).toFixed(0)}% de la deuda TDC.`,
+      `Con la liquidez actual cubres ${((liquidTotal / Math.max(debtTotal, 1)) * 100).toFixed(0)}% de la deuda TDC.`,
     );
   }
   if (minPayments > 0 && liquidTotal < minPayments) {
@@ -203,7 +268,9 @@ export default async function AnalyticsPage() {
       "Los pagos mínimos abiertos superan tu liquidez. Prioriza fondear débito antes del vencimiento.",
     );
   } else if (minPayments > 0) {
-    insights.push("Tienes liquidez suficiente para cubrir los pagos mínimos actuales.");
+    insights.push(
+      "Tienes liquidez suficiente para cubrir los pagos mínimos actuales.",
+    );
   }
   if (subMonthly > 0) {
     insights.push(
@@ -213,6 +280,24 @@ export default async function AnalyticsPage() {
   if (utilizationPct >= 80) {
     insights.push(
       `Uso agregado de crédito al ${utilizationPct}%. Arriba de 80% suele afectar tu margen y tu score.`,
+    );
+  }
+  if (expenseCompare.deltaPct != null) {
+    if (expenseCompare.deltaPct > 10) {
+      insights.push(
+        `Gastaste ${expenseCompare.deltaPct}% más que el mes pasado (${formatRough(Math.abs(expenseCompare.deltaCents))} de diferencia).`,
+      );
+    } else if (expenseCompare.deltaPct < -10) {
+      insights.push(
+        `Gastaste ${Math.abs(expenseCompare.deltaPct)}% menos que el mes pasado — buen control de ritmo.`,
+      );
+    }
+  }
+  if (savingsRate != null) {
+    insights.push(
+      savingsRate >= 20
+        ? `Tasa de ahorro del mes: ${savingsRate}% (sólida si se sostiene).`
+        : `Tasa de ahorro del mes: ${savingsRate}%. Meta saludable suele estar cerca de 20%+.`,
     );
   }
   if ((txsMonth ?? []).length === 0) {
@@ -233,7 +318,7 @@ export default async function AnalyticsPage() {
     <div className="dash-enter space-y-6 sm:space-y-8">
       <PageHeader
         title="Analíticas"
-        subtitle={`Panorama de ${monthLabel}: patrimonio, flujo, crédito y suscripciones.`}
+        subtitle={`Detalle de ${monthLabel}: flujo, categorías, crédito y ritmo vs el mes anterior.`}
       />
 
       <SummaryStrip>
@@ -264,19 +349,134 @@ export default async function AnalyticsPage() {
           </StatCell>
         </SummaryCell>
         <SummaryCell>
-          <StatCell label="Uso de crédito" hint="Deuda / límite agregado">
-            {utilizationPct}%
+          <StatCell
+            label="Tasa de ahorro"
+            hint={
+              savingsRate == null ? "Sin ingresos este mes" : "(ing − gas) / ing"
+            }
+          >
+            {savingsRate == null ? "—" : `${savingsRate}%`}
           </StatCell>
         </SummaryCell>
         <SummaryCell>
-          <StatCell
-            label="Suscripciones / mes"
-            hint={`${(subscriptions ?? []).length} activas`}
-          >
-            <Mxn cents={subMonthly} />
+          <StatCell label="Vs mes anterior" hint="Cambio en gastos">
+            <span
+              className={
+                expenseCompare.deltaCents > 0
+                  ? "text-[var(--danger-ink)]"
+                  : expenseCompare.deltaCents < 0
+                    ? "text-[var(--positive)]"
+                    : "text-[var(--ink)]"
+              }
+            >
+              {expenseCompare.deltaPct == null
+                ? "—"
+                : `${expenseCompare.deltaPct > 0 ? "+" : ""}${expenseCompare.deltaPct}%`}
+            </span>
           </StatCell>
         </SummaryCell>
       </SummaryStrip>
+
+      <Panel>
+        <SectionTitle
+          title="Flujo diario · 90 días"
+          subtitle="Ingresos y gastos capturados (sin transferencias internas)"
+        />
+        <div className="mt-4">
+          <CashflowAreaChart data={daily90} />
+        </div>
+      </Panel>
+
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+        <Panel>
+          <SectionTitle
+            title="Este mes vs anterior"
+            subtitle="Comparativo de ingresos y gastos"
+          />
+          <div className="mt-2">
+            <IncomeExpenseCompareChart
+              incomeMonth={incomeMonth}
+              expenseMonth={expenseMonth}
+              incomePrev={incomePrev}
+              expensePrev={expensePrev}
+            />
+          </div>
+        </Panel>
+        <Panel>
+          <SectionTitle
+            title="Gastos por categoría · 30d"
+            subtitle="Dónde se va el dinero"
+          />
+          <div className="mt-2">
+            <CategoryPieChart data={categories} />
+          </div>
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+        <Panel>
+          <SectionTitle
+            title="Top comercios · 30d"
+            subtitle="Ranking de gasto por comercio"
+          />
+          <div className="mt-2">
+            <MerchantBarChart data={merchants} />
+          </div>
+        </Panel>
+        <Panel>
+          <SectionTitle
+            title="Lectura rápida"
+            subtitle="Señales accionables, no ruido"
+          />
+          {insights.length === 0 ? (
+            <EmptyState
+              title="Todo en calma"
+              body="Cuando registres más movimiento, aquí verás alertas de cobertura, uso de crédito y ritmo de gasto."
+            />
+          ) : (
+            <ul className="space-y-3">
+              {insights.map((text) => (
+                <li
+                  key={text}
+                  className="flex gap-3 text-sm leading-relaxed text-[var(--ink)]"
+                >
+                  <span
+                    className="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--accent)]"
+                    aria-hidden
+                  />
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 text-sm">
+            <div>
+              <dt className="text-xs text-[var(--muted)]">Uso de crédito</dt>
+              <dd className="mt-0.5 font-medium tabular-nums">
+                {utilizationPct}%
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">Suscripciones / mes</dt>
+              <dd className="mt-0.5 font-medium tabular-nums">
+                <Mxn cents={subMonthly} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">Pista de liquidez</dt>
+              <dd className="mt-0.5 font-medium tabular-nums">
+                {runwayDays == null ? "—" : `${runwayDays} días`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">Pagos mínimos</dt>
+              <dd className="mt-0.5 font-medium tabular-nums">
+                <Mxn cents={minPayments} />
+              </dd>
+            </div>
+          </dl>
+        </Panel>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <Panel>
@@ -304,91 +504,18 @@ export default async function AnalyticsPage() {
           />
           <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 text-sm">
             <div>
-              <dt className="text-xs text-[var(--muted)]">Pagos mínimos</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">
-                <Mxn cents={minPayments} />
+              <dt className="text-xs text-[var(--muted)]">Ingresos · 30d</dt>
+              <dd className="mt-0.5 font-medium text-[var(--positive)] tabular-nums">
+                <Mxn cents={income30} />
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-[var(--muted)]">Límite total</dt>
+              <dt className="text-xs text-[var(--muted)]">Gastos · 30d</dt>
               <dd className="mt-0.5 font-medium tabular-nums">
-                <Mxn cents={limitTotal} />
+                <Mxn cents={expense30} />
               </dd>
             </div>
           </dl>
-        </Panel>
-
-        <Panel>
-          <SectionTitle
-            title="Lectura rápida"
-            subtitle="Señales accionables, no ruido"
-          />
-          {insights.length === 0 ? (
-            <EmptyState
-              title="Todo en calma"
-              body="Cuando registres más movimiento, aquí verás alertas de cobertura, uso de crédito y ritmo de gasto."
-            />
-          ) : (
-            <ul className="space-y-3">
-              {insights.map((text) => (
-                <li
-                  key={text}
-                  className="flex gap-3 text-sm leading-relaxed text-[var(--ink)]"
-                >
-                  <span
-                    className="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--accent)]"
-                    aria-hidden
-                  />
-                  <span>{text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        <Panel>
-          <SectionTitle
-            title="Flujo registrado"
-            subtitle="Basado en movimientos que ya capturaste"
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-[var(--muted)]">Ingresos · mes</p>
-              <p className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--positive)] tabular-nums">
-                <Mxn cents={incomeMonth} />
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--muted)]">Gastos · mes</p>
-              <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums">
-                <Mxn cents={expenseMonth} />
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--muted)]">Ingresos · 30 días</p>
-              <p className="mt-1 font-medium text-[var(--positive)] tabular-nums">
-                <Mxn cents={income30} />
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--muted)]">Gastos · 30 días</p>
-              <p className="mt-1 font-medium tabular-nums">
-                <Mxn cents={expense30} />
-              </p>
-            </div>
-          </div>
-          {runwayDays != null ? (
-            <p className="mt-4 text-sm text-[var(--muted)]">
-              Pista de liquidez ≈ <strong className="text-[var(--ink)]">{runwayDays} días</strong> al
-              ritmo de los últimos 30 días.
-            </p>
-          ) : (
-            <p className="mt-4 text-sm text-[var(--muted)]">
-              Registra gastos para estimar cuántos días cubre tu liquidez.
-            </p>
-          )}
           <Link
             href="/app/transactions"
             className="mt-3 inline-block text-xs text-[var(--accent)] underline-offset-2 hover:underline"
@@ -399,32 +526,66 @@ export default async function AnalyticsPage() {
 
         <Panel>
           <SectionTitle
-            title="Principales comercios"
-            subtitle="Gastos de los últimos 30 días"
+            title="Crédito por tarjeta"
+            subtitle="Uso del límite y cercanía al pago"
+            action={
+              <Link
+                href="/app/accounts"
+                className="text-xs text-[var(--muted)] underline-offset-2 hover:underline"
+              >
+                Cuentas
+              </Link>
+            }
           />
-          {topMerchants.length === 0 ? (
+          {cards.length === 0 ? (
             <EmptyState
-              title="Sin gastos tipados"
-              body="Cuando registres expenses con comercio, aquí verás el ranking."
-              actionHref="/app/transactions"
-              actionLabel="Registrar gasto"
+              title="Sin tarjetas"
+              body="Agrega una TDC para ver utilización y calendario."
+              actionHref="/app/accounts/new"
+              actionLabel="Nueva cuenta"
             />
           ) : (
-            <ul className="space-y-3">
-              {topMerchants.map(([name, cents]) => {
-                const pct = expense30 > 0 ? Math.round((cents / expense30) * 100) : 0;
+            <ul className="grid grid-cols-1 gap-3">
+              {cards.map((a) => {
+                const p = profileByAccount.get(a.id);
+                const due = dueSoon.find((d) => d.name === a.name);
                 return (
-                  <li key={name}>
-                    <div className="flex justify-between gap-2 text-sm">
-                      <span className="truncate font-medium">{name}</span>
-                      <Mxn cents={cents} className="shrink-0 tabular-nums" />
-                    </div>
-                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--line)]">
-                      <div
-                        className="h-full rounded-full bg-[var(--accent)]"
-                        style={{ width: `${pct}%` }}
+                  <li
+                    key={a.id}
+                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--wash)]/50 p-4"
+                  >
+                    <div className="flex justify-between gap-2">
+                      <Link
+                        href={`/app/accounts/${a.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {a.name}
+                      </Link>
+                      <Mxn
+                        cents={a.balance_cents}
+                        className="tabular-nums font-medium"
                       />
                     </div>
+                    {p ? (
+                      <UtilizationBar
+                        owedCents={a.balance_cents}
+                        limitCents={p.credit_limit_cents}
+                      />
+                    ) : null}
+                    {due ? (
+                      <p className="mt-2 text-xs text-[var(--muted)]">
+                        Pago {due.due}
+                        {due.days <= 14
+                          ? ` · ${due.days <= 0 ? "hoy" : `en ${due.days}d`}`
+                          : ""}
+                        {due.min > 0 ? (
+                          <>
+                            {" "}
+                            · mín. <Mxn cents={due.min} />
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
                   </li>
                 );
               })}
@@ -433,77 +594,11 @@ export default async function AnalyticsPage() {
         </Panel>
       </div>
 
-      <Panel>
-        <SectionTitle
-          title="Crédito por tarjeta"
-          subtitle="Uso del límite y cercanía al pago"
-          action={
-            <Link
-              href="/app/accounts"
-              className="text-xs text-[var(--muted)] underline-offset-2 hover:underline"
-            >
-              Cuentas
-            </Link>
-          }
-        />
-        {cards.length === 0 ? (
-          <EmptyState
-            title="Sin tarjetas"
-            body="Agrega una TDC para ver utilización y calendario."
-            actionHref="/app/accounts/new"
-            actionLabel="Nueva cuenta"
-          />
-        ) : (
-          <ul className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-            {cards.map((a) => {
-              const p = profileByAccount.get(a.id);
-              const due = dueSoon.find((d) => d.name === a.name);
-              return (
-                <li
-                  key={a.id}
-                  className="rounded-xl border border-[var(--line)] bg-[var(--wash)]/50 p-4"
-                >
-                  <div className="flex justify-between gap-2">
-                    <Link
-                      href={`/app/accounts/${a.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {a.name}
-                    </Link>
-                    <Mxn cents={a.balance_cents} className="tabular-nums font-medium" />
-                  </div>
-                  {p ? (
-                    <UtilizationBar
-                      owedCents={a.balance_cents}
-                      limitCents={p.credit_limit_cents}
-                    />
-                  ) : null}
-                  {due ? (
-                    <p className="mt-2 text-xs text-[var(--muted)]">
-                      Pago {due.due}
-                      {due.days <= 14
-                        ? ` · ${due.days <= 0 ? "hoy" : `en ${due.days}d`}`
-                        : ""}
-                      {due.min > 0 ? (
-                        <>
-                          {" "}
-                          · mín. <Mxn cents={due.min} />
-                        </>
-                      ) : null}
-                    </p>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Panel>
-
       {ownedProjectIds.length > 1 ? (
         <Panel>
           <SectionTitle
             title="Rollup de proyectos propios"
-            subtitle="Suma de liquidez y deuda TDC en proyectos donde eres dueño (vista aparte del ledger activo)"
+            subtitle="Suma de liquidez y deuda TDC en proyectos donde eres dueño"
           />
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div>
@@ -526,8 +621,8 @@ export default async function AnalyticsPage() {
             </div>
           </div>
           <p className="mt-3 text-xs text-[var(--muted)]">
-            {ownedProjectIds.length} proyectos · la vista principal sigue siendo solo “
-            {project.name}”.
+            {ownedProjectIds.length} proyectos · la vista principal sigue siendo
+            solo “{project.name}”.
           </p>
         </Panel>
       ) : null}
@@ -568,7 +663,10 @@ function CompositionRow({
         <Mxn cents={cents} className="tabular-nums font-medium" />
       </div>
       <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[var(--line)]">
-        <div className={`h-full rounded-full ${fill}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full ${fill}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );
