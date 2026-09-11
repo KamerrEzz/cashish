@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* Cashish — finanzas personales. Claro: sage diurno. Oscuro: bosque nocturno. */
 :root {
   --wash: #eef3ef;
   --surface: #fbfcfb;
@@ -9,8 +10,45 @@
   --accent: #1f6b4a;
   --accent-deep: #0f3d2a;
   --accent-soft: #e3f0e8;
+  --input: #ffffff;
+  --warn: #c47b1a;
+  --warn-ink: #7a4a0c;
+  --warn-soft: #f8efdf;
+  --danger: #b42318;
+  --danger-ink: #7a1a12;
+  --danger-soft: #f8e8e6;
+  --positive: #1a7a4c;
+  --positive-ink: #0f3d2a;
+  --glow-a: #d7ebe0;
+  --glow-b: #cfe0d6;
   --background: var(--wash);
   --foreground: var(--ink);
+  color-scheme: light;
+}
+
+html.dark {
+  --wash: #0a110e;
+  --surface: #121a16;
+  --ink: #e6efe9;
+  --muted: #8b9e93;
+  --line: #24332b;
+  --accent: #4aad78;
+  --accent-deep: #8fd4ae;
+  --accent-soft: #1a2b22;
+  --input: #0e1612;
+  --warn: #d4a017;
+  --warn-ink: #f0d48a;
+  --warn-soft: #2a2410;
+  --danger: #e07a72;
+  --danger-ink: #f0b4ae;
+  --danger-soft: #2a1614;
+  --positive: #5cbf8a;
+  --positive-ink: #8fd4ae;
+  --glow-a: #143026;
+  --glow-b: #0f1f18;
+  --background: var(--wash);
+  --foreground: var(--ink);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -22,9 +60,50 @@
 
 body {
   background:
-    radial-gradient(1200px 600px at 10% -10%, #d7ebe0 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #cfe0d6 0%, transparent 50%),
+    radial-gradient(1100px 520px at 8% -8%, var(--glow-a) 0%, transparent 55%),
+    radial-gradient(900px 480px at 100% 0%, var(--glow-b) 0%, transparent 50%),
     var(--wash);
   color: var(--ink);
   font-family: var(--font-body), system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dash-enter > * {
+    animation: dash-rise 0.55s ease both;
+  }
+  .dash-enter > *:nth-child(1) {
+    animation-delay: 0.02s;
+  }
+  .dash-enter > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .dash-enter > *:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .dash-enter > *:nth-child(4) {
+    animation-delay: 0.14s;
+  }
+  .dash-enter > *:nth-child(5) {
+    animation-delay: 0.18s;
+  }
+  .dash-enter > *:nth-child(6) {
+    animation-delay: 0.22s;
+  }
+}
+
+@keyframes dash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-enter > * {
+    animation: none;
+  }
 }
