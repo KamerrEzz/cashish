@@ -251,6 +251,24 @@ export default async function DashboardPage() {
         </SummaryCell>
       </SummaryStrip>
 
+      <Panel>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
+              Flujo de caja
+            </h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              {coverageOk
+                ? "Mínimos de TDC cubiertos con tu liquidez actual"
+                : "Revisa si alcanzas los recurrentes y cortes"}
+            </p>
+          </div>
+          <Link href="/app/cashflow" className={btnGhost}>
+            Ver proyección
+          </Link>
+        </div>
+      </Panel>
+
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Panel>
           <div className="flex flex-wrap items-start justify-between gap-3">

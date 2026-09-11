@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { todayMexico } from "@/lib/credit-cycle";
+import { requireProject } from "@/lib/projects";
 import {
   TX_EXPORT_MAX,
   buildExportFilename,
@@ -11,14 +11,14 @@ import {
 } from "@/lib/transactions-query";
 
 export async function GET(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  let projectCtx;
+  try {
+    projectCtx = await requireProject();
+  } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { supabase, project } = projectCtx;
   const url = new URL(request.url);
   const filters = parseTransactionFilters(url.searchParams);
   const today = todayMexico();
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     .select(
       "id, type, amount_cents, currency, merchant, description, category, occurred_on, transfer_id, accounts(name)",
     )
-    .eq("user_id", user.id)
+    .eq("project_id", project.id)
     .gte("occurred_on", range.from)
     .lte("occurred_on", range.to)
     .order("occurred_on", { ascending: false })

@@ -6,6 +6,11 @@ import {
   buildNextStatementWindow,
   todayMexico,
 } from "@/lib/credit-cycle";
+import {
+  projectCashflow,
+  suggestPayToAvoidInterest,
+} from "@/lib/cashflow/engine";
+import { merchantKey } from "@/lib/merchant";
 import type { Database } from "@/lib/database.types";
 import type { Admin, CashishToolDef } from "./types";
 
@@ -1406,6 +1411,7 @@ export function buildCashishTools(): CashishToolDef[] {
           "cashish_dashboard",
           "cashish_upcoming_events",
           "cashish_list_tools_help",
+          "cashish_cashflow_forecast",
         ],
         accounts: [
           "cashish_list_accounts",
@@ -1425,6 +1431,7 @@ export function buildCashishTools(): CashishToolDef[] {
           "cashish_list_transfers",
           "cashish_create_transfer",
           "cashish_pay_credit_card",
+          "cashish_pay_to_avoid_interest",
         ],
         statements: [
           "cashish_list_statement_periods",
@@ -1438,15 +1445,390 @@ export function buildCashishTools(): CashishToolDef[] {
           "cashish_create_subscription",
           "cashish_update_subscription",
           "cashish_toggle_subscription",
+          "cashish_suggest_subscriptions",
+        ],
+        phase3: [
+          "cashish_list_receipts",
+          "cashish_list_installments",
+          "cashish_list_budgets",
+          "cashish_cashflow_forecast",
         ],
         reminders: ["cashish_list_reminders", "cashish_dismiss_reminder"],
         notes: [
           "Montos siempre como string MXN con hasta 2 decimales.",
           "TDC: balance_cents = deuda (owed). available = limit - owed.",
-          "Pagos a tarjeta: preferir cashish_pay_credit_card o create_transfer hacia la TDC.",
+          "Pagos a tarjeta: preferir cashish_pay_credit_card o cashish_pay_to_avoid_interest (confirm:false = preview).",
+          "Cortes/pagos: list_statement_periods → close_statement → pay → mark_statement_paid.",
+          "Forecast: cashish_cashflow_forecast. Import/tickets: UI /app/import y /app/receipts.",
         ],
       };
     },
-  }
+  },
+  {
+    name: "cashish_cashflow_forecast",
+    title: "Cashflow forecast",
+    description:
+      "Proyecta liquidez vs suscripciones, mínimos TDC, ingresos planeados y MSI.",
+    inputSchema: z
+      .object({
+        days: z.number().int().min(7).max(120).default(60),
+      })
+      .strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx, args) => {
+      const days = (args as { days?: number }).days ?? 60;
+      const supabase = ctx.db();
+      const today = todayMexico();
+      const [
+        { data: accounts },
+        { data: profiles },
+        { data: openPeriods },
+        { data: closedPeriods },
+        { data: subs },
+        { data: planned },
+        { data: installments },
+      ] = await Promise.all([
+        supabase.from("accounts").select("*").eq("project_id", ctx.projectId).eq("is_archived", false),
+        supabase.from("credit_card_profiles").select("*").eq("project_id", ctx.projectId),
+        supabase.from("statement_periods").select("*").eq("project_id", ctx.projectId).eq("status", "open"),
+        supabase.from("statement_periods").select("*").eq("project_id", ctx.projectId).eq("status", "closed").order("closes_on", { ascending: false }),
+        supabase.from("subscriptions").select("*").eq("project_id", ctx.projectId).eq("is_active", true),
+        supabase.from("planned_inflows").select("*").eq("project_id", ctx.projectId).eq("is_active", true),
+        supabase.from("installment_plans").select("*").eq("project_id", ctx.projectId).eq("is_active", true),
+      ]);
+
+      const liquid = (accounts ?? []).filter((a) => a.type !== "credit_card");
+      const cards = (accounts ?? []).filter((a) => a.type === "credit_card");
+      const profileBy = new Map((profiles ?? []).map((p) => [p.account_id, p]));
+      const openBy = new Map((openPeriods ?? []).map((p) => [p.account_id, p]));
+      const closedBy = new Map<string, NonNullable<typeof closedPeriods>[number]>();
+      for (const p of closedPeriods ?? []) {
+        if (!closedBy.has(p.account_id)) closedBy.set(p.account_id, p);
+      }
+
+      const creditObligations = cards.map((card) => {
+        const open = openBy.get(card.id);
+        const closed = closedBy.get(card.id);
+        const profile = profileBy.get(card.id);
+        const suggestion = suggestPayToAvoidInterest({
+          closingBalanceCents: closed?.closing_balance_cents ?? null,
+          currentDebtCents: card.balance_cents,
+          minimumCents:
+            closed?.minimum_payment_cents ||
+            open?.minimum_payment_cents ||
+            profile?.minimum_payment_cents ||
+            0,
+        });
+        return {
+          accountId: card.id,
+          accountName: card.name,
+          dueOn: closed?.due_on ?? open?.due_on ?? today,
+          minimumCents: suggestion.minimumCents,
+          balanceCents: suggestion.avoidInterestCents,
+        };
+      });
+
+      const forecast = projectCashflow({
+        asOf: today,
+        horizonDays: days,
+        startingLiquidCents: liquid.reduce((s, a) => s + a.balance_cents, 0),
+        plannedInflows: (planned ?? []).map((p) => ({
+          id: p.id,
+          label: p.label,
+          amountCents: p.amount_cents,
+          nextOn: p.next_on,
+          frequency: p.frequency,
+        })),
+        subscriptions: (subs ?? []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          amountCents: s.amount_cents,
+          nextBillingOn: s.next_billing_on,
+          frequency: s.frequency,
+        })),
+        creditObligations,
+        installments: (installments ?? []).map((i) => ({
+          id: i.id,
+          label: i.label,
+          installmentCents: i.installment_cents,
+          nextDueOn: i.next_due_on,
+          monthsRemaining: i.months_remaining,
+        })),
+      });
+
+      return {
+        ...forecast,
+        starting_liquid: formatMxn(money(forecast.startingLiquidCents)),
+        ending_liquid: formatMxn(money(forecast.endingLiquidCents)),
+        shortfall: formatMxn(money(forecast.shortfallCents)),
+        events: forecast.events.slice(0, 40).map((e) => ({
+          date: e.date,
+          kind: e.kind,
+          label: e.label,
+          amount: formatMxn(money(e.amountCents)),
+          amount_cents: e.amountCents,
+        })),
+      };
+    },
+  },
+  {
+    name: "cashish_suggest_subscriptions",
+    title: "Suggest subscriptions",
+    description:
+      "Detecta comercios con cargos recurrentes similares (merchant_key) en ~6 meses.",
+    inputSchema: z.object({}).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx) => {
+      const supabase = ctx.db();
+      const since = new Date();
+      since.setMonth(since.getMonth() - 6);
+      const sinceIso = since.toISOString().slice(0, 10);
+      const [{ data: txs }, { data: subs }] = await Promise.all([
+        supabase
+          .from("transactions")
+          .select("merchant, merchant_key, amount_cents, occurred_on, type")
+          .eq("project_id", ctx.projectId)
+          .eq("type", "expense")
+          .is("transfer_id", null)
+          .gte("occurred_on", sinceIso)
+          .not("merchant", "is", null)
+          .limit(2000),
+        supabase.from("subscriptions").select("merchant").eq("project_id", ctx.projectId),
+      ]);
+      const tracked = new Set(
+        (subs ?? []).map((s) => merchantKey(s.merchant)).filter((k): k is string => Boolean(k)),
+      );
+      const byKey = new Map<string, { merchantSample: string; amounts: number[]; dates: string[] }>();
+      for (const tx of txs ?? []) {
+        const key = tx.merchant_key || merchantKey(tx.merchant);
+        if (!key || !tx.merchant) continue;
+        const acc = byKey.get(key) ?? { merchantSample: tx.merchant, amounts: [], dates: [] };
+        acc.amounts.push(tx.amount_cents);
+        acc.dates.push(tx.occurred_on);
+        byKey.set(key, acc);
+      }
+      const suggestions = [];
+      for (const [key, acc] of byKey) {
+        if (acc.amounts.length < 3) continue;
+        const avg = acc.amounts.reduce((s, n) => s + n, 0) / Math.max(acc.amounts.length, 1);
+        const within = acc.amounts.filter((a) => Math.abs(a - avg) / Math.max(avg, 1) <= 0.15);
+        if (within.length < 3) continue;
+        acc.dates.sort();
+        suggestions.push({
+          merchant_key: key,
+          merchant: acc.merchantSample,
+          count: acc.amounts.length,
+          avg_cents: Math.round(avg),
+          avg: formatMxn(money(Math.round(avg))),
+          last_occurred_on: acc.dates[acc.dates.length - 1],
+          already_tracked: tracked.has(key),
+        });
+      }
+      suggestions.sort((a, b) => b.count - a.count);
+      return { suggestions: suggestions.slice(0, 12) };
+    },
+  },
+  {
+    name: "cashish_list_receipts",
+    title: "List receipts",
+    description: "Lista tickets del proyecto con status y parseo.",
+    inputSchema: z
+      .object({
+        status: z.enum(["uploaded", "parsing", "ready", "failed", "applied"]).optional(),
+        limit: z.number().int().min(1).max(100).default(30),
+      })
+      .strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx, args) => {
+      const input = args as { status?: string; limit?: number };
+      let q = ctx
+        .db()
+        .from("receipts")
+        .select("id, status, mime, parsed, error, transaction_id, created_at")
+        .eq("project_id", ctx.projectId)
+        .order("created_at", { ascending: false })
+        .limit(input.limit ?? 30);
+      if (input.status) q = q.eq("status", input.status as "ready");
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return { receipts: data ?? [] };
+    },
+  },
+  {
+    name: "cashish_list_installments",
+    title: "List MSI installment plans",
+    description: "Planes MSI activos del proyecto.",
+    inputSchema: z.object({}).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx) => {
+      const { data, error } = await ctx
+        .db()
+        .from("installment_plans")
+        .select("*, accounts(name)")
+        .eq("project_id", ctx.projectId)
+        .eq("is_active", true)
+        .order("next_due_on");
+      if (error) throw new Error(error.message);
+      return {
+        installments: (data ?? []).map((i) => ({
+          ...i,
+          installment: formatMxn(money(i.installment_cents)),
+          total: formatMxn(money(i.total_cents)),
+        })),
+      };
+    },
+  },
+  {
+    name: "cashish_pay_to_avoid_interest",
+    title: "Pay to avoid interest",
+    description:
+      "Calcula/ejecuta pago a TDC: mínimo o sin intereses. confirm=false solo preview.",
+    inputSchema: z
+      .object({
+        from_account_id: z.string().uuid(),
+        credit_card_account_id: z.string().uuid(),
+        mode: z.enum(["minimum", "avoid_interest"]).default("avoid_interest"),
+        confirm: z.boolean().default(false),
+        note: z.string().optional(),
+      })
+      .strict(),
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx, args) => {
+      const input = args as {
+        from_account_id: string;
+        credit_card_account_id: string;
+        mode?: "minimum" | "avoid_interest";
+        confirm?: boolean;
+        note?: string;
+      };
+      const supabase = ctx.db();
+      const mode = input.mode ?? "avoid_interest";
+      const fromAcc = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.from_account_id);
+      const card = await getOwnedAccount(supabase, ctx.userId, ctx.projectId, input.credit_card_account_id);
+      const [{ data: profile }, { data: closed }, { data: open }] = await Promise.all([
+        supabase.from("credit_card_profiles").select("*").eq("account_id", input.credit_card_account_id).eq("project_id", ctx.projectId).maybeSingle(),
+        supabase.from("statement_periods").select("*").eq("account_id", input.credit_card_account_id).eq("project_id", ctx.projectId).eq("status", "closed").order("closes_on", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("statement_periods").select("*").eq("account_id", input.credit_card_account_id).eq("project_id", ctx.projectId).eq("status", "open").maybeSingle(),
+      ]);
+
+      if (fromAcc.type === "credit_card") throw new Error("No se puede pagar desde una TDC");
+      if (card.type !== "credit_card" || !profile) {
+        throw new Error("credit_card_account_id debe ser una TDC con perfil");
+      }
+
+      const suggestion = suggestPayToAvoidInterest({
+        closingBalanceCents: closed?.closing_balance_cents ?? null,
+        currentDebtCents: card.balance_cents,
+        minimumCents:
+          closed?.minimum_payment_cents ||
+          open?.minimum_payment_cents ||
+          profile.minimum_payment_cents,
+      });
+      const amountCents =
+        mode === "minimum" ? suggestion.minimumCents : suggestion.avoidInterestCents;
+
+      const preview = {
+        mode,
+        amount_cents: amountCents,
+        amount: formatMxn(money(amountCents)),
+        minimum_cents: suggestion.minimumCents,
+        avoid_interest_cents: suggestion.avoidInterestCents,
+        confirm: Boolean(input.confirm),
+      };
+
+      if (!input.confirm) return { preview: true, ...preview };
+      if (amountCents <= 0) throw new Error("Monto sugerido es 0");
+      if (amountCents > fromAcc.balance_cents) {
+        throw new Error("Liquidez insuficiente en la cuenta origen");
+      }
+
+      const occurred = todayMexico();
+      const note = input.note ?? `Pago TDC (${mode})`;
+      const { data: transfer, error: transferError } = await supabase
+        .from("transfers")
+        .insert({
+          user_id: ctx.userId,
+          project_id: ctx.projectId,
+          from_account_id: fromAcc.id,
+          to_account_id: card.id,
+          amount_cents: amountCents,
+          occurred_on: occurred,
+          note,
+        })
+        .select("*")
+        .single();
+      if (transferError) throw new Error(transferError.message);
+
+      await supabase.from("accounts").update({ balance_cents: fromAcc.balance_cents - amountCents, updated_at: new Date().toISOString() }).eq("id", fromAcc.id);
+      await supabase.from("accounts").update({ balance_cents: card.balance_cents - amountCents, updated_at: new Date().toISOString() }).eq("id", card.id);
+
+      await supabase.from("transactions").insert([
+        {
+          user_id: ctx.userId,
+          project_id: ctx.projectId,
+          account_id: fromAcc.id,
+          type: "transfer",
+          amount_cents: amountCents,
+          description: note,
+          occurred_on: occurred,
+          transfer_id: transfer.id,
+        },
+        {
+          user_id: ctx.userId,
+          project_id: ctx.projectId,
+          account_id: card.id,
+          type: "transfer",
+          amount_cents: amountCents,
+          description: note,
+          occurred_on: occurred,
+          transfer_id: transfer.id,
+          statement_period_id: open?.id ?? null,
+        },
+      ]);
+
+      return { preview: false, transfer, ...preview };
+    },
+  },
+  {
+    name: "cashish_list_budgets",
+    title: "List budgets",
+    description: "Presupuestos/envelopes del proyecto con gasto del mes.",
+    inputSchema: z.object({}).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx) => {
+      const today = todayMexico();
+      const [y, m] = today.split("-").map(Number);
+      const start = `${y}-${String(m).padStart(2, "0")}-01`;
+      const endDate = new Date(y, m, 0);
+      const end = `${y}-${String(m).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+      const [{ data: budgets }, { data: txs }] = await Promise.all([
+        ctx.db().from("budgets").select("*").eq("project_id", ctx.projectId).eq("is_active", true).order("name"),
+        ctx.db().from("transactions").select("amount_cents, category, type").eq("project_id", ctx.projectId).eq("type", "expense").is("transfer_id", null).gte("occurred_on", start).lte("occurred_on", end),
+      ]);
+      const spentByCategory = new Map<string, number>();
+      for (const tx of txs ?? []) {
+        const key = (tx.category ?? "").trim().toLowerCase();
+        if (!key) continue;
+        spentByCategory.set(key, (spentByCategory.get(key) ?? 0) + tx.amount_cents);
+      }
+      return {
+        month: start.slice(0, 7),
+        budgets: (budgets ?? []).map((b) => {
+          const catKey = (b.category ?? b.name).trim().toLowerCase();
+          const spent = spentByCategory.get(catKey) ?? 0;
+          return {
+            id: b.id,
+            name: b.name,
+            category: b.category,
+            monthly_limit_cents: b.monthly_limit_cents,
+            monthly_limit: formatMxn(money(b.monthly_limit_cents)),
+            spent_cents: spent,
+            spent: formatMxn(money(spent)),
+            remaining_cents: b.monthly_limit_cents - spent,
+          };
+        }),
+      };
+    },
+  },
   ];
 }

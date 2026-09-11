@@ -20,6 +20,10 @@ import {
   markStatementPaid,
   createLinkedTransfer,
 } from "@/app/actions/transfers";
+import { suggestPayToAvoidInterest } from "@/lib/cashflow/engine";
+import { CcProfileForm } from "@/components/cc-profile-form";
+import { SmartPayForm } from "@/components/smart-pay-form";
+import { formatMxn, money } from "@/lib/money";
 
 export default async function AccountDetailPage({
   params,
@@ -73,10 +77,21 @@ export default async function AccountDetailPage({
 
   const openPeriod = (periods ?? []).find((p) => p.status === "open");
   const closedUnpaid = (periods ?? []).filter((p) => p.status === "closed");
+  const latestClosed = (periods ?? []).find((p) => p.status === "closed");
   const isCard = account.type === "credit_card" && profile;
   const available = isCard
     ? availableCreditCents(profile.credit_limit_cents, account.balance_cents)
     : 0;
+  const smartPay = isCard
+    ? suggestPayToAvoidInterest({
+        closingBalanceCents: latestClosed?.closing_balance_cents ?? null,
+        currentDebtCents: account.balance_cents,
+        minimumCents:
+          latestClosed?.minimum_payment_cents ||
+          openPeriod?.minimum_payment_cents ||
+          profile.minimum_payment_cents,
+      })
+    : { minimumCents: 0, avoidInterestCents: 0 };
 
   return (
     <div className="dash-enter space-y-6">
@@ -167,42 +182,53 @@ export default async function AccountDetailPage({
               title="Pagar tarjeta"
               subtitle="Transferencia vinculada: baja el débito y reduce la deuda"
             />
-            <form
-              action={async (formData) => {
-                "use server";
-                await createLinkedTransfer(formData);
-              }}
-              className="space-y-3"
-            >
-              <input type="hidden" name="toAccountId" value={account.id} />
-              <input type="hidden" name="occurredOn" value={todayMexico()} />
-              <Field label="Desde">
-                <select name="fromAccountId" required className={inputClass}>
-                  {(sources ?? []).map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Monto">
-                <input
-                  name="amount"
-                  required
-                  className={inputClass}
-                  placeholder="0.00"
-                />
-              </Field>
-              <Field label="Nota">
-                <input
-                  name="note"
-                  className={inputClass}
-                  placeholder="Pago TDC"
-                  defaultValue="Pago tarjeta"
-                />
-              </Field>
-              <SubmitButton>Registrar pago</SubmitButton>
-            </form>
+            <SmartPayForm
+              creditCardAccountId={account.id}
+              sources={sources ?? []}
+              minimumCents={smartPay.minimumCents}
+              avoidInterestCents={smartPay.avoidInterestCents}
+            />
+            <div className="mt-6 border-t border-[var(--line)] pt-4">
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                O captura un monto libre
+              </p>
+              <form
+                action={async (formData) => {
+                  "use server";
+                  await createLinkedTransfer(formData);
+                }}
+                className="space-y-3"
+              >
+                <input type="hidden" name="toAccountId" value={account.id} />
+                <input type="hidden" name="occurredOn" value={todayMexico()} />
+                <Field label="Desde">
+                  <select name="fromAccountId" required className={inputClass}>
+                    {(sources ?? []).map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Monto">
+                  <input
+                    name="amount"
+                    required
+                    className={inputClass}
+                    placeholder="0.00"
+                  />
+                </Field>
+                <Field label="Nota">
+                  <input
+                    name="note"
+                    className={inputClass}
+                    placeholder="Pago TDC"
+                    defaultValue="Pago tarjeta"
+                  />
+                </Field>
+                <SubmitButton>Registrar pago</SubmitButton>
+              </form>
+            </div>
           </Panel>
         ) : (
           <Panel>
@@ -221,6 +247,29 @@ export default async function AccountDetailPage({
           </Panel>
         )}
       </div>
+
+      {isCard ? (
+        <Panel>
+          <SectionTitle
+            title="Perfil de tarjeta"
+            subtitle="Límite, corte y pago mínimo"
+          />
+          <div className="mt-4 max-w-md">
+            <CcProfileForm
+              accountId={account.id}
+              creditLimitCents={profile.credit_limit_cents}
+              statementCloseDay={profile.statement_close_day}
+              paymentDueDay={profile.payment_due_day}
+              minimumPaymentCents={profile.minimum_payment_cents}
+            />
+          </div>
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Referencia sin intereses:{" "}
+            {formatMxn(money(smartPay.avoidInterestCents))} (usa saldo cerrado
+            si existe; si no, la deuda actual).
+          </p>
+        </Panel>
+      ) : null}
 
       {isCard && openPeriod ? (
         <Panel>

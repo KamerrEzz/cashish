@@ -61,7 +61,7 @@ Además recuerda **qué tarjeta cobra Netflix** y cuándo toca el siguiente cobr
 }
 ```
 
-Herramientas (27): panorama (`cashish_dashboard`, `cashish_upcoming_events`), cuentas CRUD + perfil TDC, movimientos/búsqueda, transferencias y pago TDC, cortes (abrir/cerrar/marcar pagado), suscripciones y recordatorios. Usa `cashish_list_tools_help` desde el agente.
+Herramientas MCP: panorama (`cashish_dashboard`, `cashish_upcoming_events`, `cashish_cashflow_forecast`), cuentas CRUD + perfil TDC, movimientos/búsqueda, transferencias y pago TDC (`cashish_pay_to_avoid_interest`), cortes, suscripciones (+ sugerencias), presupuestos/MSI/tickets list, recordatorios. Usa `cashish_list_tools_help` desde el agente.
 
 > El endpoint MCP requiere `SUPABASE_SERVICE_ROLE_KEY` en el entorno del servidor (nunca en el cliente).
 
@@ -94,6 +94,7 @@ npm run build
 | `NEXT_PUBLIC_APP_URL` | URL pública (redirects / snippets MCP) |
 | `CASHISH_APP_SECRET` | Wrap AES (≥32) para claves BYOK del asistente |
 | `RESEND_API_KEY` | Emails de recordatorio (opcional) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Push web (opcional; sin ella la UI pide configurar VAPID) |
 
 ## Estructura
 
@@ -114,11 +115,11 @@ supabase/migrations/
 ## Roadmap breve
 
 1. ~~Proyectos (ledgers) + invitaciones + tickets MVP~~ (fase 2)  
-2. Import CSV/OFX + sugerencias de suscripción  
-3. Cashflow “¿alcanzo a cubrir los recurrentes?” + analíticas 2.5  
-4. MSI · envelopes · push  
+2. ~~Import CSV/OFX + sugerencias de suscripción~~ (fase 3 — en progreso/done en app)  
+3. ~~Cashflow “¿alcanzo a cubrir los recurrentes?” + presupuestos/MSI~~ (fase 3)  
+4. Push (VAPID) + polish analíticas rollup  
 
-Ver también [`docs/ai.md`](docs/ai.md) y [`docs/projects.md`](docs/projects.md).  
+Ver [`docs/ai.md`](docs/ai.md), [`docs/projects.md`](docs/projects.md), [`docs/cashflow.md`](docs/cashflow.md), [`docs/phase3.md`](docs/phase3.md).  
 
 
 ## Licencia

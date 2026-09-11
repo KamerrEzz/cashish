@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { parseMxnInput } from "@/lib/money";
-import { requireProject } from "@/lib/projects";
+import { merchantKey } from "@/lib/merchant";
+import { requireProjectWriter } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export async function createTransaction(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase, user, project } = await requireProject();
+  const { supabase, user, project } = await requireProjectWriter();
 
   const parsed = z
     .object({
@@ -93,6 +94,7 @@ export async function createTransaction(
     type: parsed.data.type,
     amount_cents: amountCents,
     merchant: parsed.data.merchant ?? null,
+    merchant_key: merchantKey(parsed.data.merchant),
     description: parsed.data.description ?? null,
     category: parsed.data.category ?? null,
     occurred_on: parsed.data.occurredOn,

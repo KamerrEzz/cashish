@@ -1,6 +1,7 @@
 import { requireProject } from "@/lib/projects";
 import { PageHeader, Panel, Mxn } from "@/components/ui";
 import { SubscriptionManager } from "@/components/subscription-manager";
+import { SubscriptionSuggestions } from "@/components/subscription-suggestions";
 
 export default async function SubscriptionsPage() {
   const { supabase, project } = await requireProject();
@@ -61,6 +62,9 @@ export default async function SubscriptionsPage() {
         </Panel>
       </div>
 
+      <SubscriptionSuggestions
+        accounts={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
+      />
       <SubscriptionManager accounts={accounts ?? []} subscriptions={rows} />
     </div>
   );

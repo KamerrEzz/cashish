@@ -38,6 +38,12 @@ export function InviteForm({
           placeholder="alguien@correo.com"
         />
       </Field>
+      <Field label="Rol">
+        <select name="role" className={inputClass} defaultValue="member">
+          <option value="member">Miembro (escribe)</option>
+          <option value="viewer">Solo lectura</option>
+        </select>
+      </Field>
       {error ? (
         <p className="text-sm text-[var(--danger-ink)]">{error}</p>
       ) : null}

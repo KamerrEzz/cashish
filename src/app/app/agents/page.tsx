@@ -2,6 +2,7 @@ import { requireProject } from "@/lib/projects";
 import { PageHeader, Panel } from "@/components/ui";
 import { AgentsPanel } from "@/components/agents-panel";
 import { AiKeyForm } from "@/components/ai/ai-key-form";
+import { PushEnableButton } from "@/components/push-enable-button";
 import { getUserAiMeta } from "@/lib/ai/user-key";
 import { SectionTitle } from "@/components/empty-state";
 
@@ -58,6 +59,16 @@ export default async function AgentsPage() {
       </Panel>
 
       <AgentsPanel keys={keys ?? []} mcpUrl={`${appUrl}/api/mcp`} />
+
+      <Panel>
+        <SectionTitle
+          title="Avisos push"
+          subtitle="Opcional — requiere VAPID y service worker"
+        />
+        <div className="mt-4">
+          <PushEnableButton />
+        </div>
+      </Panel>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   createSubscription,
   toggleSubscription,
+  updateSubscription,
 } from "@/app/actions/subscriptions";
 import { SubmitButton } from "@/components/submit-button";
 import { Field, inputClass, btnGhost, Mxn } from "@/components/ui";
@@ -22,6 +23,7 @@ export function SubscriptionManager({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function onCreate(formData: FormData) {
     setError(null);
@@ -30,6 +32,17 @@ export function SubscriptionManager({
       setError(result.error);
       return;
     }
+    router.refresh();
+  }
+
+  async function onUpdate(formData: FormData) {
+    setError(null);
+    const result = await updateSubscription(formData);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setEditingId(null);
     router.refresh();
   }
 
@@ -120,24 +133,116 @@ export function SubscriptionManager({
             key={s.id}
             className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4"
           >
-            <div className="flex justify-between gap-2">
-              <div>
-                <p className="font-semibold">{s.name}</p>
-                <p className="text-xs text-[var(--muted)]">
-                  {s.merchant} · {s.accounts?.name ?? "—"} · próximo{" "}
-                  {s.next_billing_on}
-                  {!s.is_active ? " · pausada" : ""}
-                </p>
-              </div>
-              <Mxn cents={s.amount_cents} className="font-medium tabular-nums" />
-            </div>
-            <button
-              type="button"
-              className={`${btnGhost} mt-3`}
-              onClick={() => onToggle(s.id, !s.is_active)}
-            >
-              {s.is_active ? "Pausar" : "Reactivar"}
-            </button>
+            {editingId === s.id ? (
+              <form action={onUpdate} className="space-y-2">
+                <input type="hidden" name="id" value={s.id} />
+                <Field label="Nombre">
+                  <input
+                    name="name"
+                    required
+                    className={inputClass}
+                    defaultValue={s.name}
+                  />
+                </Field>
+                <Field label="Comercio">
+                  <input
+                    name="merchant"
+                    required
+                    className={inputClass}
+                    defaultValue={s.merchant}
+                  />
+                </Field>
+                <Field label="Cuenta">
+                  <select
+                    name="accountId"
+                    required
+                    className={inputClass}
+                    defaultValue={s.account_id}
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Monto">
+                  <input
+                    name="amount"
+                    required
+                    className={inputClass}
+                    defaultValue={(s.amount_cents / 100).toFixed(2)}
+                  />
+                </Field>
+                <Field label="Frecuencia">
+                  <select
+                    name="frequency"
+                    className={inputClass}
+                    defaultValue={s.frequency}
+                  >
+                    <option value="weekly">Semanal</option>
+                    <option value="monthly">Mensual</option>
+                    <option value="yearly">Anual</option>
+                  </select>
+                </Field>
+                <Field label="Próximo cobro">
+                  <input
+                    type="date"
+                    name="nextBillingOn"
+                    required
+                    className={inputClass}
+                    defaultValue={s.next_billing_on}
+                  />
+                </Field>
+                <Field label="Notas">
+                  <input
+                    name="notes"
+                    className={inputClass}
+                    defaultValue={s.notes ?? ""}
+                  />
+                </Field>
+                <div className="flex flex-wrap gap-2">
+                  <SubmitButton>Actualizar</SubmitButton>
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => setEditingId(null)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="flex justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{s.name}</p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {s.merchant} · {s.accounts?.name ?? "—"} · próximo{" "}
+                      {s.next_billing_on}
+                      {!s.is_active ? " · pausada" : ""}
+                    </p>
+                  </div>
+                  <Mxn cents={s.amount_cents} className="font-medium tabular-nums" />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => onToggle(s.id, !s.is_active)}
+                  >
+                    {s.is_active ? "Pausar" : "Reactivar"}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => setEditingId(s.id)}
+                  >
+                    Editar
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>

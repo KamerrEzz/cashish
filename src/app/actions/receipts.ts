@@ -7,16 +7,19 @@ import type { ActionResult } from "@/app/actions/accounts";
 import { compatibleClient } from "@/lib/ai/provider";
 import { getUserAiCred, MissingAiKeyError } from "@/lib/ai/user-key";
 import { parseMxnInput } from "@/lib/money";
-import { requireProject } from "@/lib/projects";
+import { merchantKey } from "@/lib/merchant";
+import { requireProjectWriter } from "@/lib/projects";
 import type { Json } from "@/lib/database.types";
 
 const parsedReceiptSchema = z.object({
   amount: z.string().min(1),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   merchant: z.string().nullable().optional(),
+  merchant_key: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   type: z.enum(["expense", "income"]),
+  confidence: z.number().min(0).max(1).optional(),
 });
 
 export type ParsedReceiptDraft = z.infer<typeof parsedReceiptSchema>;
@@ -96,15 +99,22 @@ function coerceParsed(raw: unknown): ParsedReceiptDraft | null {
       : typeof obj.occurred_on === "string"
         ? obj.occurred_on
         : todayIsoMexico();
+  const merchant =
+    typeof obj.merchant === "string"
+      ? obj.merchant
+      : obj.merchant == null
+        ? null
+        : String(obj.merchant);
+  const confidenceRaw = obj.confidence;
+  const confidence =
+    typeof confidenceRaw === "number" && Number.isFinite(confidenceRaw)
+      ? Math.min(1, Math.max(0, confidenceRaw))
+      : 0.7;
   const result = parsedReceiptSchema.safeParse({
     amount: String(amount ?? ""),
     occurredOn: occurredOn.slice(0, 10),
-    merchant:
-      typeof obj.merchant === "string"
-        ? obj.merchant
-        : obj.merchant == null
-          ? null
-          : String(obj.merchant),
+    merchant,
+    merchant_key: merchantKey(merchant),
     category:
       typeof obj.category === "string"
         ? obj.category
@@ -118,8 +128,17 @@ function coerceParsed(raw: unknown): ParsedReceiptDraft | null {
           ? null
           : String(obj.description),
     type: obj.type === "income" ? "income" : "expense",
+    confidence,
   });
   return result.success ? result.data : null;
+}
+
+function withMerchantMeta(parsed: ParsedReceiptDraft): ParsedReceiptDraft {
+  return {
+    ...parsed,
+    merchant_key: parsed.merchant_key ?? merchantKey(parsed.merchant),
+    confidence: parsed.confidence ?? 0.7,
+  };
 }
 
 async function extractWithAi(opts: {
@@ -227,7 +246,7 @@ Monto en MXN decimal con punto. Si no hay fecha, usa ${todayIsoMexico()}. type c
 export async function uploadReceipt(
   formData: FormData,
 ): Promise<UploadReceiptResult> {
-  const { supabase, user, project } = await requireProject();
+  const { supabase, user, project } = await requireProjectWriter();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "Elige un archivo de ticket." };
@@ -302,12 +321,14 @@ export async function uploadReceipt(
 
   try {
     const client = compatibleClient(cred.apiKey, cred.baseUrl);
-    const parsed = await extractWithAi({
-      mime,
-      bytes,
-      chatModel: cred.chatModel,
-      client,
-    });
+    const parsed = withMerchantMeta(
+      await extractWithAi({
+        mime,
+        bytes,
+        chatModel: cred.chatModel,
+        client,
+      }),
+    );
 
     const { error: readyError } = await supabase
       .from("receipts")
@@ -325,6 +346,7 @@ export async function uploadReceipt(
     }
 
     revalidatePath("/app/transactions");
+    revalidatePath("/app/receipts");
     return { ok: true, receiptId: receipt.id, parsed };
   } catch (err) {
     const message =
@@ -338,14 +360,157 @@ export async function uploadReceipt(
       })
       .eq("id", receipt.id)
       .eq("project_id", project.id);
+    revalidatePath("/app/receipts");
     return { ok: false, error: message };
   }
+}
+
+export async function retryReceiptParse(
+  receiptId: string,
+): Promise<UploadReceiptResult> {
+  const { supabase, project } = await requireProjectWriter();
+  if (!z.string().uuid().safeParse(receiptId).success) {
+    return { ok: false, error: "Ticket inválido." };
+  }
+
+  const { data: receipt, error: receiptError } = await supabase
+    .from("receipts")
+    .select("id, storage_path, mime, status, transaction_id")
+    .eq("id", receiptId)
+    .eq("project_id", project.id)
+    .maybeSingle();
+
+  if (receiptError || !receipt) {
+    return { ok: false, error: "Ticket no encontrado." };
+  }
+  if (receipt.status === "applied" || receipt.transaction_id) {
+    return { ok: false, error: "Este ticket ya se aplicó." };
+  }
+
+  let cred;
+  try {
+    cred = await getUserAiCred(supabase);
+  } catch (err) {
+    if (err instanceof MissingAiKeyError) {
+      return {
+        ok: false,
+        error:
+          "Para leer tickets configura tu clave de modelo en Agentes (BYOK).",
+      };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error de clave de IA.",
+    };
+  }
+
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from("receipts")
+    .download(receipt.storage_path);
+
+  if (downloadError || !blob) {
+    return {
+      ok: false,
+      error: downloadError?.message ?? "No se pudo descargar el archivo.",
+    };
+  }
+
+  const bytes = Buffer.from(await blob.arrayBuffer());
+
+  await supabase
+    .from("receipts")
+    .update({
+      status: "parsing",
+      error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", receipt.id)
+    .eq("project_id", project.id);
+
+  try {
+    const client = compatibleClient(cred.apiKey, cred.baseUrl);
+    const parsed = withMerchantMeta(
+      await extractWithAi({
+        mime: receipt.mime,
+        bytes,
+        chatModel: cred.chatModel,
+        client,
+      }),
+    );
+
+    const { error: readyError } = await supabase
+      .from("receipts")
+      .update({
+        status: "ready",
+        parsed: parsed as Json,
+        error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", receipt.id)
+      .eq("project_id", project.id);
+
+    if (readyError) {
+      return { ok: false, error: readyError.message };
+    }
+
+    revalidatePath("/app/receipts");
+    revalidatePath("/app/transactions");
+    return { ok: true, receiptId: receipt.id, parsed };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Falló el análisis del ticket.";
+    await supabase
+      .from("receipts")
+      .update({
+        status: "failed",
+        error: message,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", receipt.id)
+      .eq("project_id", project.id);
+    revalidatePath("/app/receipts");
+    return { ok: false, error: message };
+  }
+}
+
+export async function discardReceipt(receiptId: string): Promise<ActionResult> {
+  const { supabase, project } = await requireProjectWriter();
+  if (!z.string().uuid().safeParse(receiptId).success) {
+    return { ok: false, error: "Ticket inválido." };
+  }
+
+  const { data: receipt } = await supabase
+    .from("receipts")
+    .select("id, storage_path, status, transaction_id")
+    .eq("id", receiptId)
+    .eq("project_id", project.id)
+    .maybeSingle();
+
+  if (!receipt) {
+    return { ok: false, error: "Ticket no encontrado." };
+  }
+  if (receipt.status === "applied" || receipt.transaction_id) {
+    return { ok: false, error: "No se puede descartar un ticket aplicado." };
+  }
+
+  await supabase.storage.from("receipts").remove([receipt.storage_path]);
+
+  const { error } = await supabase
+    .from("receipts")
+    .delete()
+    .eq("id", receipt.id)
+    .eq("project_id", project.id);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/app/receipts");
+  revalidatePath("/app/transactions");
+  return { ok: true };
 }
 
 export async function applyReceipt(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase, user, project } = await requireProject();
+  const { supabase, user, project } = await requireProjectWriter();
 
   const parsed = z
     .object({
@@ -445,6 +610,7 @@ export async function applyReceipt(
       type: parsed.data.type,
       amount_cents: amountCents,
       merchant: parsed.data.merchant ?? null,
+      merchant_key: merchantKey(parsed.data.merchant),
       description: parsed.data.description ?? null,
       category: parsed.data.category ?? null,
       occurred_on: parsed.data.occurredOn,
@@ -479,9 +645,11 @@ export async function applyReceipt(
         amount: parsed.data.amount,
         occurredOn: parsed.data.occurredOn,
         merchant: parsed.data.merchant ?? null,
+        merchant_key: merchantKey(parsed.data.merchant),
         category: parsed.data.category ?? null,
         description: parsed.data.description ?? null,
         type: parsed.data.type,
+        confidence: 0.7,
       } as Json,
       error: null,
       updated_at: new Date().toISOString(),
@@ -495,6 +663,7 @@ export async function applyReceipt(
 
   revalidatePath("/app");
   revalidatePath("/app/transactions");
+  revalidatePath("/app/receipts");
   revalidatePath(`/app/accounts/${account.id}`);
   return { ok: true };
 }

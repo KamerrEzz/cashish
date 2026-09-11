@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { parseMxnInput } from "@/lib/money";
-import { requireProject } from "@/lib/projects";
+import { requireProjectWriter } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export async function createLinkedTransfer(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase } = await requireProject();
+  const { supabase } = await requireProjectWriter();
 
   const parsed = z
     .object({
@@ -62,7 +62,7 @@ export async function createLinkedTransfer(
 export async function closeStatementPeriod(
   formData: FormData,
 ): Promise<ActionResult> {
-  const { supabase } = await requireProject();
+  const { supabase } = await requireProjectWriter();
 
   const accountId = String(formData.get("accountId") ?? "");
   const minRaw = formData.get("minimumPayment");
@@ -93,7 +93,32 @@ export async function markStatementPaid(
   statementId: string,
   accountId: string,
 ): Promise<ActionResult> {
-  const { supabase, project } = await requireProject();
+  const { supabase, project } = await requireProjectWriter();
+
+  if (
+    !z.string().uuid().safeParse(statementId).success ||
+    !z.string().uuid().safeParse(accountId).success
+  ) {
+    return { ok: false, error: "Identificadores inválidos." };
+  }
+
+  const { data: period, error: fetchError } = await supabase
+    .from("statement_periods")
+    .select("id, status, account_id")
+    .eq("id", statementId)
+    .eq("project_id", project.id)
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (fetchError) return { ok: false, error: fetchError.message };
+  if (!period) return { ok: false, error: "Periodo no encontrado." };
+  if (period.status !== "closed") {
+    return {
+      ok: false,
+      error: "Solo puedes marcar como pagado un estado cerrado.",
+    };
+  }
+
   const { error } = await supabase
     .from("statement_periods")
     .update({ status: "paid" })

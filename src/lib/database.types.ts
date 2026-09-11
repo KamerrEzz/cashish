@@ -17,13 +17,21 @@ type ReminderEventType =
   | "cashflow_shortfall";
 type ReminderChannel = "in_app" | "email";
 type ReminderStatus = "pending" | "sent" | "dismissed";
-type ProjectMemberRole = "owner" | "member";
+type ProjectMemberRole = "owner" | "member" | "viewer";
+type ImportRowStatus =
+  | "pending"
+  | "review"
+  | "applied"
+  | "rejected"
+  | "duplicate";
 type ReceiptStatus =
   | "uploaded"
   | "parsing"
   | "ready"
   | "failed"
   | "applied";
+type ImportBatchStatus = "review" | "applied" | "cancelled";
+type PlannedFrequency = SubscriptionFrequency;
 
 export type Database = {
   public: {
@@ -60,6 +68,7 @@ export type Database = {
           created_by: string;
           created_at: string;
           updated_at: string;
+          archived_at: string | null;
         };
         Insert: {
           id?: string;
@@ -68,6 +77,7 @@ export type Database = {
           created_by: string;
           created_at?: string;
           updated_at?: string;
+          archived_at?: string | null;
         };
         Update: {
           id?: string;
@@ -76,6 +86,7 @@ export type Database = {
           created_by?: string;
           created_at?: string;
           updated_at?: string;
+          archived_at?: string | null;
         };
         Relationships: [
           {
@@ -331,6 +342,7 @@ export type Database = {
           amount_cents: number;
           currency: string;
           merchant: string | null;
+          merchant_key: string | null;
           description: string | null;
           category: string | null;
           occurred_on: string;
@@ -348,6 +360,7 @@ export type Database = {
           amount_cents: number;
           currency?: string;
           merchant?: string | null;
+          merchant_key?: string | null;
           description?: string | null;
           category?: string | null;
           occurred_on?: string;
@@ -365,6 +378,7 @@ export type Database = {
           amount_cents?: number;
           currency?: string;
           merchant?: string | null;
+          merchant_key?: string | null;
           description?: string | null;
           category?: string | null;
           occurred_on?: string;
@@ -637,6 +651,301 @@ export type Database = {
           },
         ];
       };
+      import_batches: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          source_filename: string;
+          source_format: "csv" | "ofx";
+          account_id: string | null;
+          status: ImportBatchStatus;
+          row_count: number;
+          applied_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          source_filename: string;
+          source_format: "csv" | "ofx";
+          account_id?: string | null;
+          status?: ImportBatchStatus;
+          row_count?: number;
+          applied_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          user_id?: string;
+          source_filename?: string;
+          source_format?: "csv" | "ofx";
+          account_id?: string | null;
+          status?: ImportBatchStatus;
+          row_count?: number;
+          applied_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      import_rows: {
+        Row: {
+          id: string;
+          batch_id: string;
+          project_id: string;
+          status: ImportRowStatus;
+          occurred_on: string;
+          amount_cents: number;
+          type: TransactionType;
+          merchant: string | null;
+          description: string | null;
+          category: string | null;
+          fingerprint: string;
+          raw: Json;
+          transaction_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          batch_id: string;
+          project_id: string;
+          status?: ImportRowStatus;
+          occurred_on: string;
+          amount_cents: number;
+          type: TransactionType;
+          merchant?: string | null;
+          description?: string | null;
+          category?: string | null;
+          fingerprint: string;
+          raw?: Json;
+          transaction_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          batch_id?: string;
+          project_id?: string;
+          status?: ImportRowStatus;
+          occurred_on?: string;
+          amount_cents?: number;
+          type?: TransactionType;
+          merchant?: string | null;
+          description?: string | null;
+          category?: string | null;
+          fingerprint?: string;
+          raw?: Json;
+          transaction_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "import_rows_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "import_batches";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      planned_inflows: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          label: string;
+          amount_cents: number;
+          currency: string;
+          next_on: string;
+          frequency: PlannedFrequency;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          label: string;
+          amount_cents: number;
+          currency?: string;
+          next_on: string;
+          frequency?: PlannedFrequency;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          user_id?: string;
+          label?: string;
+          amount_cents?: number;
+          currency?: string;
+          next_on?: string;
+          frequency?: PlannedFrequency;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "planned_inflows_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      installment_plans: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          account_id: string;
+          transaction_id: string | null;
+          label: string;
+          total_cents: number;
+          installment_cents: number;
+          months_total: number;
+          months_remaining: number;
+          next_due_on: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          account_id: string;
+          transaction_id?: string | null;
+          label: string;
+          total_cents: number;
+          installment_cents: number;
+          months_total: number;
+          months_remaining: number;
+          next_due_on: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          user_id?: string;
+          account_id?: string;
+          transaction_id?: string | null;
+          label?: string;
+          total_cents?: number;
+          installment_cents?: number;
+          months_total?: number;
+          months_remaining?: number;
+          next_due_on?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "installment_plans_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      budgets: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          name: string;
+          category: string | null;
+          monthly_limit_cents: number;
+          currency: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          name: string;
+          category?: string | null;
+          monthly_limit_cents: number;
+          currency?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          user_id?: string;
+          name?: string;
+          category?: string | null;
+          monthly_limit_cents?: number;
+          currency?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "budgets_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          project_id: string | null;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          project_id?: string | null;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          project_id?: string | null;
+          endpoint?: string;
+          p256dh?: string;
+          auth?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       user_ai_credentials: {
         Row: {
           user_id: string;
@@ -827,6 +1136,18 @@ export type Database = {
         Args: { p_project_id: string };
         Returns: boolean;
       };
+      is_project_writer: {
+        Args: { p_project_id: string };
+        Returns: boolean;
+      };
+      apply_import_rows: {
+        Args: {
+          p_batch_id: string;
+          p_account_id: string;
+          p_row_ids?: string[] | null;
+        };
+        Returns: number;
+      };
       create_project: {
         Args: { p_name: string; p_slug: string };
         Returns: string;
@@ -885,6 +1206,7 @@ export type Database = {
       reminder_status: ReminderStatus;
       project_member_role: ProjectMemberRole;
       receipt_status: ReceiptStatus;
+      import_row_status: ImportRowStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -898,3 +1220,14 @@ export type StatementPeriod =
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"];
 export type Reminder = Database["public"]["Tables"]["reminders"]["Row"];
+export type ImportBatch = Database["public"]["Tables"]["import_batches"]["Row"];
+export type ImportRow = Database["public"]["Tables"]["import_rows"]["Row"];
+export type PlannedInflow =
+  Database["public"]["Tables"]["planned_inflows"]["Row"];
+export type InstallmentPlan =
+  Database["public"]["Tables"]["installment_plans"]["Row"];
+export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
+export type PushSubscription =
+  Database["public"]["Tables"]["push_subscriptions"]["Row"];
+export type ProjectMemberRoleDb = Database["public"]["Enums"]["project_member_role"];
+export type ImportRowStatusDb = Database["public"]["Enums"]["import_row_status"];

@@ -1,15 +1,21 @@
-import { addDays, format, parseISO } from "date-fns";
+import { addDays, addMonths, addWeeks, addYears, format, parseISO } from "date-fns";
 import { Resend } from "resend";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { formatMxn, money } from "@/lib/money";
 import { todayMexico } from "@/lib/credit-cycle";
+import { projectCashflow, suggestPayToAvoidInterest } from "@/lib/cashflow/engine";
 
 const LEAD_DAYS = 3;
+const CASHFLOW_HORIZON = 45;
 
 type ReminderInsert = {
   user_id: string;
   project_id: string;
-  event_type: "statement_close" | "payment_due" | "subscription_charge";
+  event_type:
+    | "statement_close"
+    | "payment_due"
+    | "subscription_charge"
+    | "cashflow_shortfall";
   channel: "in_app" | "email";
   title: string;
   body: string;
@@ -25,6 +31,20 @@ function withinLead(dueOn: string, today: string): boolean {
   const start = parseISO(today);
   const end = addDays(start, LEAD_DAYS);
   return due >= start && due <= end;
+}
+
+function advanceBilling(
+  date: string,
+  frequency: "weekly" | "monthly" | "yearly",
+): string {
+  const d = parseISO(`${date}T12:00:00`);
+  const next =
+    frequency === "weekly"
+      ? addWeeks(d, 1)
+      : frequency === "yearly"
+        ? addYears(d, 1)
+        : addMonths(d, 1);
+  return format(next, "yyyy-MM-dd");
 }
 
 function dedupeKey(parts: {
@@ -51,6 +71,31 @@ export async function materializeAndSendReminders() {
   const admin = createServiceClient();
   const today = todayMexico();
   const inserts: ReminderInsert[] = [];
+
+  // Advance past-due active subscriptions
+  const { data: allSubs } = await admin
+    .from("subscriptions")
+    .select("id, next_billing_on, frequency, is_active")
+    .eq("is_active", true)
+    .lt("next_billing_on", today);
+
+  for (const sub of allSubs ?? []) {
+    let next = sub.next_billing_on;
+    let guard = 0;
+    while (next < today && guard < 120) {
+      next = advanceBilling(next, sub.frequency);
+      guard += 1;
+    }
+    if (next !== sub.next_billing_on) {
+      await admin
+        .from("subscriptions")
+        .update({
+          next_billing_on: next,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", sub.id);
+    }
+  }
 
   const { data: periods } = await admin
     .from("statement_periods")
@@ -149,6 +194,158 @@ export async function materializeAndSendReminders() {
           subscriptionId: sub.id,
         }),
       });
+    }
+  }
+
+  // Cashflow shortfall per project
+  const { data: allAccounts } = await admin
+    .from("accounts")
+    .select("*")
+    .eq("is_archived", false);
+
+  const accountsByProject = new Map<string, typeof allAccounts>();
+  for (const a of allAccounts ?? []) {
+    const list = accountsByProject.get(a.project_id) ?? [];
+    list.push(a);
+    accountsByProject.set(a.project_id, list);
+  }
+
+  for (const [projectId, projectAccounts] of accountsByProject) {
+    if (!projectAccounts || projectAccounts.length === 0) continue;
+
+    const [
+      { data: profiles },
+      { data: openPeriods },
+      { data: closedPeriods },
+      { data: projectSubs },
+      { data: planned },
+      { data: installments },
+      { data: members },
+    ] = await Promise.all([
+      admin
+        .from("credit_card_profiles")
+        .select("*")
+        .eq("project_id", projectId),
+      admin
+        .from("statement_periods")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("status", "open"),
+      admin
+        .from("statement_periods")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("status", "closed")
+        .order("closes_on", { ascending: false }),
+      admin
+        .from("subscriptions")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("is_active", true),
+      admin
+        .from("planned_inflows")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("is_active", true),
+      admin
+        .from("installment_plans")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("is_active", true),
+      admin
+        .from("project_members")
+        .select("user_id, role")
+        .eq("project_id", projectId)
+        .in("role", ["owner", "member"]),
+    ]);
+
+    const liquid = projectAccounts.filter((a) => a.type !== "credit_card");
+    const cards = projectAccounts.filter((a) => a.type === "credit_card");
+    const profileBy = new Map((profiles ?? []).map((p) => [p.account_id, p]));
+    const openBy = new Map((openPeriods ?? []).map((p) => [p.account_id, p]));
+    const closedBy = new Map<
+      string,
+      {
+        account_id: string;
+        due_on: string;
+        closing_balance_cents: number | null;
+        minimum_payment_cents: number;
+      }
+    >();
+    for (const p of closedPeriods ?? []) {
+      if (!closedBy.has(p.account_id)) closedBy.set(p.account_id, p);
+    }
+
+    const creditObligations = cards.map((card) => {
+      const open = openBy.get(card.id);
+      const closed = closedBy.get(card.id);
+      const profile = profileBy.get(card.id);
+      const suggestion = suggestPayToAvoidInterest({
+        closingBalanceCents: closed?.closing_balance_cents ?? null,
+        currentDebtCents: card.balance_cents,
+        minimumCents:
+          closed?.minimum_payment_cents ||
+          open?.minimum_payment_cents ||
+          profile?.minimum_payment_cents ||
+          0,
+      });
+      return {
+        accountId: card.id,
+        accountName: card.name,
+        dueOn: closed?.due_on ?? open?.due_on ?? today,
+        minimumCents: suggestion.minimumCents,
+        balanceCents: suggestion.avoidInterestCents,
+      };
+    });
+
+    const forecast = projectCashflow({
+      asOf: today,
+      horizonDays: CASHFLOW_HORIZON,
+      startingLiquidCents: liquid.reduce((s, a) => s + a.balance_cents, 0),
+      plannedInflows: (planned ?? []).map((p) => ({
+        id: p.id,
+        label: p.label,
+        amountCents: p.amount_cents,
+        nextOn: p.next_on,
+        frequency: p.frequency,
+      })),
+      subscriptions: (projectSubs ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        amountCents: s.amount_cents,
+        nextBillingOn: s.next_billing_on,
+        frequency: s.frequency,
+      })),
+      creditObligations,
+      installments: (installments ?? []).map((i) => ({
+        id: i.id,
+        label: i.label,
+        installmentCents: i.installment_cents,
+        nextDueOn: i.next_due_on,
+        monthsRemaining: i.months_remaining,
+      })),
+    });
+
+    if (forecast.status !== "shortfall" || !forecast.firstShortfallOn) continue;
+
+    for (const member of members ?? []) {
+      for (const channel of ["in_app", "email"] as const) {
+        inserts.push({
+          user_id: member.user_id,
+          project_id: projectId,
+          event_type: "cashflow_shortfall",
+          channel,
+          title: "Posible faltante de liquidez",
+          body: `Tu proyección a ${CASHFLOW_HORIZON} días muestra faltante desde ${forecast.firstShortfallOn} (~${formatMxn(money(forecast.shortfallCents))}). Revisa Flujo.`,
+          due_on: forecast.firstShortfallOn,
+          dedupe_key: dedupeKey({
+            userId: member.user_id,
+            event: "cashflow_shortfall",
+            channel,
+            dueOn: forecast.firstShortfallOn,
+          }),
+        });
+      }
     }
   }
 

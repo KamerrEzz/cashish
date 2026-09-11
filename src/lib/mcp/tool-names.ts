@@ -27,6 +27,12 @@ export const TOOL_NAMES = [
   "cashish_toggle_subscription",
   "cashish_list_reminders",
   "cashish_dismiss_reminder",
+  "cashish_cashflow_forecast",
+  "cashish_suggest_subscriptions",
+  "cashish_list_receipts",
+  "cashish_list_installments",
+  "cashish_pay_to_avoid_interest",
+  "cashish_list_budgets",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

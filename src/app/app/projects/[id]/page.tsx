@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { inviteToProject, switchProject } from "@/app/actions/projects";
+import {
+  archiveProject,
+  inviteToProject,
+  removeMember,
+  revokeInvite,
+  switchProject,
+} from "@/app/actions/projects";
 import { requireProject } from "@/lib/projects";
 import { SubmitButton } from "@/components/submit-button";
 import { SectionTitle } from "@/components/empty-state";
@@ -11,6 +17,12 @@ import {
   btnPrimary,
 } from "@/components/ui";
 import { InviteForm } from "@/components/invite-form";
+
+function roleLabel(role: string) {
+  if (role === "owner") return "Dueño";
+  if (role === "viewer") return "Solo lectura";
+  return "Miembro";
+}
 
 export default async function ProjectDetailPage({
   params,
@@ -51,12 +63,13 @@ export default async function ProjectDetailPage({
 
   const pending = (invites ?? []).filter((i) => !i.accepted_at);
   const isActive = active.id === project.id;
+  const archived = Boolean(project.archived_at);
 
   return (
     <div className="dash-enter space-y-8">
       <PageHeader
         title={project.name}
-        subtitle={`Slug ${project.slug} · ${isOwner ? "Eres dueño" : "Eres miembro"}`}
+        subtitle={`Slug ${project.slug} · ${isOwner ? "Eres dueño" : roleLabel(membership?.role ?? "member")}${archived ? " · archivado" : ""}`}
         action={
           <div className="flex flex-wrap gap-2">
             <Link href="/app/projects" className={btnGhost}>
@@ -104,9 +117,23 @@ export default async function ProjectDetailPage({
                     <p className="text-xs text-[var(--muted)]">{profile.email}</p>
                   ) : null}
                 </div>
-                <span className="text-xs text-[var(--muted)]">
-                  {m.role === "owner" ? "Dueño" : "Miembro"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--muted)]">
+                    {roleLabel(m.role)}
+                  </span>
+                  {isOwner && m.role !== "owner" ? (
+                    <form
+                      action={async (formData) => {
+                        "use server";
+                        await removeMember(formData);
+                      }}
+                    >
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="userId" value={m.user_id} />
+                      <SubmitButton className={btnGhost}>Quitar</SubmitButton>
+                    </form>
+                  ) : null}
+                </div>
               </li>
             );
           })}
@@ -118,7 +145,7 @@ export default async function ProjectDetailPage({
           <Panel>
             <SectionTitle
               title="Invitar"
-              subtitle="Se envía un enlace (7 días). Si Resend está configurado, también llega por correo."
+              subtitle="Miembro escribe; viewer solo lee. Enlace válido 7 días."
             />
             <div className="mt-4 max-w-md">
               <InviteForm projectId={project.id} inviteAction={inviteToProject} />
@@ -148,20 +175,49 @@ export default async function ProjectDetailPage({
                     <div className="min-w-0">
                       <p className="font-medium text-[var(--ink)]">{inv.email}</p>
                       <p className="text-xs text-[var(--muted)]">
-                        Expira{" "}
+                        {roleLabel(inv.role)} · expira{" "}
                         {new Date(inv.expires_at).toLocaleDateString("es-MX", {
                           dateStyle: "medium",
                         })}
                       </p>
+                      <p className="mt-1 max-w-xs break-all text-xs text-[var(--muted)]">
+                        /invite/{inv.token}
+                      </p>
                     </div>
-                    <p className="max-w-xs break-all text-xs text-[var(--muted)]">
-                      /invite/{inv.token}
-                    </p>
+                    <form
+                      action={async (formData) => {
+                        "use server";
+                        await revokeInvite(formData);
+                      }}
+                    >
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="inviteId" value={inv.id} />
+                      <SubmitButton className={btnGhost}>Revocar</SubmitButton>
+                    </form>
                   </li>
                 ))}
               </ul>
             )}
           </Panel>
+
+          {project.slug !== "personal" && !archived ? (
+            <Panel>
+              <SectionTitle
+                title="Archivar proyecto"
+                subtitle="Deja de usarlo en el switcher; no borra datos."
+              />
+              <form
+                action={async (formData) => {
+                  "use server";
+                  await archiveProject(formData);
+                }}
+                className="mt-4"
+              >
+                <input type="hidden" name="projectId" value={project.id} />
+                <SubmitButton className={btnGhost}>Archivar</SubmitButton>
+              </form>
+            </Panel>
+          ) : null}
         </>
       ) : null}
     </div>

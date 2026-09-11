@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth";
 export const PROJECT_COOKIE = "cashish_project_id";
 
 export type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
-export type ProjectMemberRole = "owner" | "member";
+export type ProjectMemberRole = "owner" | "member" | "viewer";
 
 export type ProjectContext = {
   supabase: SupabaseClient<Database>;
@@ -44,7 +44,7 @@ export async function listUserProjects(
     const p = row.projects as unknown as ProjectRow | ProjectRow[] | null;
     if (!p) continue;
     const project = Array.isArray(p) ? p[0] : p;
-    if (project) projects.push(project);
+    if (project && !project.archived_at) projects.push(project);
   }
   projects.sort((a, b) => {
     if (a.slug === "personal") return -1;
@@ -90,6 +90,15 @@ export async function requireProject(): Promise<ProjectContext> {
     preferred,
   );
   return { supabase, user, project, role, projects };
+}
+
+/** Mutating actions: viewers cannot write. */
+export async function requireProjectWriter(): Promise<ProjectContext> {
+  const ctx = await requireProject();
+  if (ctx.role === "viewer") {
+    throw new Error("Solo lectura en este proyecto.");
+  }
+  return ctx;
 }
 
 export async function setActiveProjectCookie(projectId: string) {

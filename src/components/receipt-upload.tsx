@@ -11,11 +11,19 @@ import { Field, inputClass, btnPrimary } from "@/components/ui";
 import { todayMexico } from "@/lib/credit-cycle";
 import type { Account } from "@/lib/database.types";
 
-export function ReceiptUpload({ accounts }: { accounts: Account[] }) {
+export function ReceiptUpload({
+  accounts,
+  initialReceiptId = null,
+  initialDraft = null,
+}: {
+  accounts: Account[];
+  initialReceiptId?: string | null;
+  initialDraft?: ParsedReceiptDraft | null;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [receiptId, setReceiptId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<ParsedReceiptDraft | null>(null);
+  const [receiptId, setReceiptId] = useState<string | null>(initialReceiptId);
+  const [draft, setDraft] = useState<ParsedReceiptDraft | null>(initialDraft);
   const [applied, setApplied] = useState(false);
 
   async function onUpload(formData: FormData) {

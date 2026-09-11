@@ -23,6 +23,11 @@ export default async function TransactionsPage({
 }) {
   const { supabase, user, project } = await requireProject();
   const params = await searchParams;
+  const receiptParam = params.receipt;
+  const focusReceiptId =
+    typeof receiptParam === "string" && receiptParam.length > 0
+      ? receiptParam
+      : null;
   const filters = parseTransactionFilters(params);
   const today = todayMexico();
   const range = resolveDateRange(filters, today);
@@ -86,7 +91,7 @@ export default async function TransactionsPage({
     summaryQuery = summaryQuery.or(or);
   }
 
-  const [{ data: accounts }, listResult, summaryResult, categoriesResult] =
+  const [{ data: accounts }, listResult, summaryResult, categoriesResult, focusReceipt] =
     await Promise.all([
       supabase
         .from("accounts")
@@ -97,7 +102,38 @@ export default async function TransactionsPage({
       listQuery,
       summaryQuery,
       categoriesQuery,
+      focusReceiptId
+        ? supabase
+            .from("receipts")
+            .select("id, status, parsed")
+            .eq("id", focusReceiptId)
+            .eq("project_id", project.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
+
+  let initialReceiptId: string | null = null;
+  let initialDraft: import("@/app/actions/receipts").ParsedReceiptDraft | null =
+    null;
+  if (
+    focusReceipt.data &&
+    focusReceipt.data.status === "ready" &&
+    focusReceipt.data.parsed &&
+    typeof focusReceipt.data.parsed === "object"
+  ) {
+    const p = focusReceipt.data.parsed as Record<string, unknown>;
+    initialReceiptId = focusReceipt.data.id;
+    initialDraft = {
+      amount: String(p.amount ?? ""),
+      occurredOn: String(p.occurredOn ?? today),
+      merchant: (p.merchant as string | null) ?? null,
+      category: (p.category as string | null) ?? null,
+      description: (p.description as string | null) ?? null,
+      type: p.type === "income" ? "income" : "expense",
+      confidence:
+        typeof p.confidence === "number" ? p.confidence : 0.7,
+    };
+  }
 
   const txs = listResult.data ?? [];
   const total = listResult.count ?? 0;
@@ -244,7 +280,11 @@ export default async function TransactionsPage({
             subtitle="Sube foto o PDF · BYOK lee el borrador · tú confirmas"
           />
           <div className="mt-4">
-            <ReceiptUpload accounts={accounts ?? []} />
+            <ReceiptUpload
+              accounts={accounts ?? []}
+              initialReceiptId={initialReceiptId}
+              initialDraft={initialDraft}
+            />
           </div>
         </Panel>
       ) : null}

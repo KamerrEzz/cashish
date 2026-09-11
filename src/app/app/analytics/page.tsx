@@ -29,7 +29,7 @@ function daysAgoIso(todayIso: string, days: number) {
 }
 
 export default async function AnalyticsPage() {
-  const { supabase, project } = await requireProject();
+  const { supabase, user, project } = await requireProject();
   const today = todayMexico();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthBounds(today);
   const since30 = daysAgoIso(today, 30);
@@ -41,6 +41,7 @@ export default async function AnalyticsPage() {
     { data: subscriptions },
     { data: txsMonth },
     { data: txs30 },
+    { data: ownedMemberships },
   ] = await Promise.all([
     supabase
       .from("accounts")
@@ -73,7 +74,45 @@ export default async function AnalyticsPage() {
       .eq("project_id", project.id)
       .gte("occurred_on", since30)
       .lte("occurred_on", today),
+    supabase
+      .from("project_members")
+      .select("project_id, projects(id, name, archived_at)")
+      .eq("user_id", user.id)
+      .eq("role", "owner"),
   ]);
+
+  const ownedProjectIds = (ownedMemberships ?? [])
+    .map((m) => {
+      const p = m.projects as
+        | { id: string; name: string; archived_at: string | null }
+        | { id: string; name: string; archived_at: string | null }[]
+        | null;
+      const row = Array.isArray(p) ? p[0] : p;
+      if (!row || row.archived_at) return null;
+      return row;
+    })
+    .filter((p): p is { id: string; name: string; archived_at: string | null } =>
+      Boolean(p),
+    );
+
+  const { data: ownedAccounts } =
+    ownedProjectIds.length > 0
+      ? await supabase
+          .from("accounts")
+          .select("project_id, type, balance_cents, is_archived")
+          .in(
+            "project_id",
+            ownedProjectIds.map((p) => p.id),
+          )
+          .eq("is_archived", false)
+      : { data: [] as Array<{ project_id: string; type: string; balance_cents: number }> };
+
+  let ownerLiquid = 0;
+  let ownerDebt = 0;
+  for (const a of ownedAccounts ?? []) {
+    if (a.type === "credit_card") ownerDebt += a.balance_cents;
+    else ownerLiquid += a.balance_cents;
+  }
 
   const liquid = (accounts ?? []).filter((a) => a.type !== "credit_card");
   const cards = (accounts ?? []).filter((a) => a.type === "credit_card");
@@ -459,6 +498,39 @@ export default async function AnalyticsPage() {
           </ul>
         )}
       </Panel>
+
+      {ownedProjectIds.length > 1 ? (
+        <Panel>
+          <SectionTitle
+            title="Rollup de proyectos propios"
+            subtitle="Suma de liquidez y deuda TDC en proyectos donde eres dueño (vista aparte del ledger activo)"
+          />
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-[var(--muted)]">Liquidez total</p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums">
+                <Mxn cents={ownerLiquid} />
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--muted)]">Deuda TDC</p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums">
+                <Mxn cents={ownerDebt} />
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--muted)]">Neto dueño</p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums">
+                <Mxn cents={ownerLiquid - ownerDebt} />
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            {ownedProjectIds.length} proyectos · la vista principal sigue siendo solo “
+            {project.name}”.
+          </p>
+        </Panel>
+      ) : null}
     </div>
   );
 }

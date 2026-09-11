@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { generateApiKey } from "@/lib/mcp/auth";
-import { requireProject } from "@/lib/projects";
+import { requireProjectWriter } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
 export type CreatedKeyResult =
@@ -13,7 +13,7 @@ export type CreatedKeyResult =
 export async function createMcpApiKey(
   formData: FormData,
 ): Promise<CreatedKeyResult> {
-  const { supabase, user, project } = await requireProject();
+  const { supabase, user, project } = await requireProjectWriter();
   const parsed = z
     .object({
       name: z.string().min(1).max(60),
@@ -51,7 +51,7 @@ export async function createMcpApiKey(
 }
 
 export async function revokeMcpApiKey(id: string): Promise<ActionResult> {
-  const { supabase, project } = await requireProject();
+  const { supabase, project } = await requireProjectWriter();
   const { error } = await supabase
     .from("mcp_api_keys")
     .update({ revoked_at: new Date().toISOString() })
