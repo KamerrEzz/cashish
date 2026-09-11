@@ -25,16 +25,14 @@ export default async function QuincenaPage() {
       />
 
       <section
-        className={`rounded-3xl border px-5 py-6 sm:px-8 ${
+        className={`rounded-[var(--radius)] border px-5 py-7 sm:px-8 ${
           ok
-            ? "border-[var(--accent)]/30 bg-[var(--accent-soft)]/40"
-            : "border-[var(--danger-ink)]/25 bg-[var(--wash)]"
+            ? "border-[var(--line)] bg-[var(--accent-soft)]/50"
+            : "border-[var(--warn)]/35 bg-[var(--warn-soft)]/40"
         }`}
       >
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">
-          Veredicto
-        </p>
-        <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl text-[var(--ink)] md:text-4xl">
+        <p className="text-sm text-[var(--muted)]">Veredicto de liquidez</p>
+        <h2 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[var(--ink)] md:text-[2.35rem]">
           {ok ? "Te alcanza esta quincena" : "Hay un hueco de liquidez"}
         </h2>
         <p className="mt-3 max-w-xl text-[var(--muted)]">

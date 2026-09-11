@@ -104,7 +104,7 @@ export function SummaryStrip({ children }: { children: React.ReactNode }) {
   return (
     <section
       aria-label="Resumen"
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--surface)] lg:shadow-[0_1px_0_rgba(20,40,30,0.04)]"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0 lg:overflow-hidden lg:rounded-[var(--radius)] lg:border lg:border-[var(--line)] lg:bg-[var(--surface)] lg:shadow-[var(--shadow)]"
     >
       {children}
     </section>
@@ -113,7 +113,7 @@ export function SummaryStrip({ children }: { children: React.ReactNode }) {
 
 export function SummaryCell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_1px_0_rgba(20,40,30,0.04)] sm:p-5 lg:rounded-none lg:border-0 lg:border-r lg:border-[var(--line)] lg:shadow-none lg:last:border-r-0">
+    <div className="min-w-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow)] sm:p-5 lg:rounded-none lg:border-0 lg:border-r lg:border-[var(--line)] lg:shadow-none lg:last:border-r-0">
       {children}
     </div>
   );

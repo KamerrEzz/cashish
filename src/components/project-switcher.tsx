@@ -2,7 +2,6 @@
 
 import { useTransition } from "react";
 import { switchProject } from "@/app/actions/projects";
-import { inputClass } from "@/components/ui";
 
 type ProjectOption = {
   id: string;
@@ -20,10 +19,10 @@ export function ProjectSwitcher({
   const [pending, startTransition] = useTransition();
 
   return (
-    <label className="flex min-w-0 items-center gap-2">
+    <label className="flex min-w-0 items-center">
       <span className="sr-only">Proyecto activo</span>
       <select
-        className={`${inputClass} !w-auto max-w-[10rem] truncate py-1.5 text-sm sm:max-w-[14rem]`}
+        className="max-w-[9.5rem] truncate rounded-md border-0 bg-transparent py-1 pr-6 text-sm font-medium text-[var(--ink)] outline-none ring-0 hover:bg-[var(--wash)] focus:bg-[var(--wash)] sm:max-w-[13rem]"
         value={activeId}
         disabled={pending || projects.length === 0}
         aria-label="Cambiar proyecto"

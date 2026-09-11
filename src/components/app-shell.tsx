@@ -20,16 +20,20 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-full bg-[var(--wash)]">
-      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
-        <div className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+    <div className="min-h-full">
+      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--header)] backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/app"
-              className="shrink-0 font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--accent-deep)]"
+              className="shrink-0 font-[family-name:var(--font-display)] text-[1.35rem] font-semibold tracking-tight text-[var(--accent-deep)]"
             >
               Cashish
             </Link>
+            <span
+              className="hidden h-4 w-px bg-[var(--line)] sm:block"
+              aria-hidden
+            />
             <ProjectSwitcher
               projects={projects.map((p) => ({
                 id: p.id,
@@ -42,7 +46,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <AppNav signOut={signOut} />
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 md:py-10">
+      <main className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 sm:py-9 md:py-10">
         {children}
       </main>
     </div>

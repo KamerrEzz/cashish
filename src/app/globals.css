@@ -1,51 +1,60 @@
 @import "tailwindcss";
 
-/* Cashish — finanzas personales. Claro: sage diurno. Oscuro: bosque nocturno. */
+/*
+  Cashish — ledger desk / economy fintech
+  Light: cool paper + ink navy. Dark: charcoal slate (not forest green).
+  Accent: deep ledger blue. Brass only for warnings / money stress.
+*/
 :root {
-  --wash: #eef3ef;
-  --surface: #fbfcfb;
-  --ink: #14241c;
-  --muted: #5a6b61;
-  --line: #d5e0d8;
-  --accent: #1f6b4a;
-  --accent-deep: #0f3d2a;
-  --accent-soft: #e3f0e8;
+  --wash: #eef1f5;
+  --surface: #ffffff;
+  --ink: #0c1222;
+  --muted: #5b6578;
+  --line: #d8dee8;
+  --accent: #1a3a5c;
+  --accent-deep: #0f2438;
+  --accent-soft: #e8eef5;
   --input: #ffffff;
-  --warn: #c47b1a;
-  --warn-ink: #7a4a0c;
-  --warn-soft: #f8efdf;
-  --danger: #b42318;
-  --danger-ink: #7a1a12;
-  --danger-soft: #f8e8e6;
-  --positive: #1a7a4c;
-  --positive-ink: #0f3d2a;
-  --glow-a: #d7ebe0;
-  --glow-b: #cfe0d6;
+  --warn: #9a6b2f;
+  --warn-ink: #6b4a1e;
+  --warn-soft: #f5eee4;
+  --danger: #a33b32;
+  --danger-ink: #7a2c26;
+  --danger-soft: #f7eaea;
+  --positive: #1f6b4f;
+  --positive-ink: #144836;
+  --glow-a: #dfe6f0;
+  --glow-b: #e8e4dc;
+  --header: rgba(255, 255, 255, 0.86);
+  --shadow: 0 1px 0 rgba(12, 18, 34, 0.04), 0 8px 24px -16px rgba(12, 18, 34, 0.18);
+  --radius: 0.625rem;
   --background: var(--wash);
   --foreground: var(--ink);
   color-scheme: light;
 }
 
 html.dark {
-  --wash: #0a110e;
-  --surface: #121a16;
-  --ink: #e6efe9;
-  --muted: #8b9e93;
-  --line: #24332b;
-  --accent: #4aad78;
-  --accent-deep: #8fd4ae;
-  --accent-soft: #1a2b22;
-  --input: #0e1612;
-  --warn: #d4a017;
-  --warn-ink: #f0d48a;
-  --warn-soft: #2a2410;
-  --danger: #e07a72;
-  --danger-ink: #f0b4ae;
-  --danger-soft: #2a1614;
-  --positive: #5cbf8a;
-  --positive-ink: #8fd4ae;
-  --glow-a: #143026;
-  --glow-b: #0f1f18;
+  --wash: #0b0d12;
+  --surface: #141820;
+  --ink: #e8ecf2;
+  --muted: #8b93a3;
+  --line: #2a3140;
+  --accent: #6b8caf;
+  --accent-deep: #a8c0d8;
+  --accent-soft: #1a2230;
+  --input: #0f1218;
+  --warn: #c4a06a;
+  --warn-ink: #e8d4b0;
+  --warn-soft: #2a2418;
+  --danger: #d48078;
+  --danger-ink: #ecc4c0;
+  --danger-soft: #2a1816;
+  --positive: #6aab90;
+  --positive-ink: #a8d4c0;
+  --glow-a: #12161f;
+  --glow-b: #16140f;
+  --header: rgba(20, 24, 32, 0.9);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 12px 32px -20px rgba(0, 0, 0, 0.55);
   --background: var(--wash);
   --foreground: var(--ink);
   color-scheme: dark;
@@ -60,41 +69,47 @@ html.dark {
 
 body {
   background:
-    radial-gradient(1100px 520px at 8% -8%, var(--glow-a) 0%, transparent 55%),
-    radial-gradient(900px 480px at 100% 0%, var(--glow-b) 0%, transparent 50%),
+    radial-gradient(900px 420px at 0% -10%, var(--glow-a) 0%, transparent 55%),
+    radial-gradient(700px 380px at 100% 0%, var(--glow-b) 0%, transparent 50%),
     var(--wash);
   color: var(--ink);
   font-family: var(--font-body), system-ui, sans-serif;
+  font-feature-settings: "ss01" on, "kern" on;
+}
+
+/* Hairline utility for ledger feel */
+.ledger-rule {
+  border-color: var(--line);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .dash-enter > * {
-    animation: dash-rise 0.55s ease both;
+    animation: dash-rise 0.45s ease both;
   }
   .dash-enter > *:nth-child(1) {
     animation-delay: 0.02s;
   }
   .dash-enter > *:nth-child(2) {
-    animation-delay: 0.06s;
+    animation-delay: 0.05s;
   }
   .dash-enter > *:nth-child(3) {
-    animation-delay: 0.1s;
+    animation-delay: 0.08s;
   }
   .dash-enter > *:nth-child(4) {
-    animation-delay: 0.14s;
+    animation-delay: 0.11s;
   }
   .dash-enter > *:nth-child(5) {
-    animation-delay: 0.18s;
+    animation-delay: 0.14s;
   }
   .dash-enter > *:nth-child(6) {
-    animation-delay: 0.22s;
+    animation-delay: 0.17s;
   }
 }
 
 @keyframes dash-rise {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -110,28 +125,26 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .landing-brand {
-    animation: landing-brand-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: landing-brand-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .landing-brand + h1 {
-    animation: dash-rise 0.7s ease 0.12s both;
+    animation: dash-rise 0.65s ease 0.1s both;
   }
   .landing-brand + h1 + p {
-    animation: dash-rise 0.7s ease 0.22s both;
+    animation: dash-rise 0.65s ease 0.18s both;
   }
   .landing-brand + h1 + p + div {
-    animation: dash-rise 0.7s ease 0.32s both;
+    animation: dash-rise 0.65s ease 0.26s both;
   }
 }
 
 @keyframes landing-brand-in {
   from {
     opacity: 0;
-    letter-spacing: -0.06em;
-    transform: translateY(12px) scale(0.98);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    letter-spacing: -0.02em;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }

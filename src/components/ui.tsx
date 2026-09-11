@@ -19,9 +19,9 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+    <div className="mb-7 flex flex-col gap-4 sm:mb-9 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="font-[family-name:var(--font-display)] text-[clamp(1.75rem,4vw,2rem)] tracking-tight text-[var(--ink)]">
+        <h1 className="font-[family-name:var(--font-display)] text-[clamp(1.65rem,3.5vw,2.05rem)] font-semibold tracking-tight text-[var(--ink)]">
           {title}
         </h1>
         {subtitle ? (
@@ -51,7 +51,7 @@ export function Panel({
   return (
     <section
       id={id}
-      className={`rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_1px_0_rgba(20,40,30,0.04)] sm:p-5 md:p-6 ${className}`}
+      className={`rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow)] sm:p-5 md:p-6 ${className}`}
     >
       {children}
     </section>
@@ -74,10 +74,10 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-[var(--line)] bg-[var(--input)] px-3 py-2.5 text-[var(--ink)] outline-none ring-[var(--accent)] placeholder:text-[var(--muted)] focus:ring-2";
+  "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--input)] px-3 py-2.5 text-[var(--ink)] outline-none ring-[var(--accent)] placeholder:text-[var(--muted)] focus:ring-2";
 
 export const btnPrimary =
-  "inline-flex w-full items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto";
+  "inline-flex w-full items-center justify-center rounded-[var(--radius)] bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto dark:text-[var(--wash)]";
 
 export const btnGhost =
-  "inline-flex w-full items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--wash)] sm:w-auto";
+  "inline-flex w-full items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--wash)] sm:w-auto";
