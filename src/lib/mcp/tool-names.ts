@@ -33,6 +33,7 @@ export const TOOL_NAMES = [
   "cashish_list_installments",
   "cashish_pay_to_avoid_interest",
   "cashish_list_budgets",
+  "cashish_quincena_plan",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

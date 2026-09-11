@@ -27,10 +27,15 @@ import { formatMxn, money } from "@/lib/money";
 
 export default async function AccountDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ pay?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const initialMode =
+    sp.pay === "avoid_interest" || sp.pay === "minimum" ? sp.pay : null;
   const { supabase, project } = await requireProject();
 
   const { data: account } = await supabase
@@ -187,6 +192,7 @@ export default async function AccountDetailPage({
               sources={sources ?? []}
               minimumCents={smartPay.minimumCents}
               avoidInterestCents={smartPay.avoidInterestCents}
+              initialMode={initialMode}
             />
             <div className="mt-6 border-t border-[var(--line)] pt-4">
               <p className="mb-3 text-xs text-[var(--muted)]">

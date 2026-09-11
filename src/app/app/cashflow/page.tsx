@@ -3,6 +3,8 @@ import { requireProject } from "@/lib/projects";
 import { todayMexico } from "@/lib/credit-cycle";
 import { projectCashflow } from "@/lib/cashflow/engine";
 import { suggestPayToAvoidInterest } from "@/lib/cashflow/engine";
+import { dailyBalancesFromForecast } from "@/lib/quincena";
+import { CashflowRunway } from "@/components/cashflow-runway";
 import {
   createPlannedInflow,
   createInstallmentPlan,
@@ -176,6 +178,18 @@ export default async function CashflowPage() {
           ) : null}
         </Panel>
       </div>
+
+      <Panel>
+        <SectionTitle
+          title="Runway"
+          subtitle="Liquidez proyectada día a día"
+        />
+        <CashflowRunway
+          forecast={forecast}
+          daily={dailyBalancesFromForecast(forecast)}
+          maxPoints={horizonDays}
+        />
+      </Panel>
 
       <Panel>
         <SectionTitle

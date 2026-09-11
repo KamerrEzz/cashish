@@ -43,6 +43,7 @@ export type Database = {
           full_name: string | null;
           timezone: string;
           created_at: string;
+          onboarding_completed_at: string | null;
         };
         Insert: {
           id: string;
@@ -50,6 +51,7 @@ export type Database = {
           full_name?: string | null;
           timezone?: string;
           created_at?: string;
+          onboarding_completed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -57,6 +59,7 @@ export type Database = {
           full_name?: string | null;
           timezone?: string;
           created_at?: string;
+          onboarding_completed_at?: string | null;
         };
         Relationships: [];
       };

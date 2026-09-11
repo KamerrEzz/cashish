@@ -115,11 +115,12 @@ supabase/migrations/
 ## Roadmap breve
 
 1. ~~Proyectos (ledgers) + invitaciones + tickets MVP~~ (fase 2)  
-2. ~~Import CSV/OFX + sugerencias de suscripción~~ (fase 3 — en progreso/done en app)  
-3. ~~Cashflow “¿alcanzo a cubrir los recurrentes?” + presupuestos/MSI~~ (fase 3)  
-4. Push (VAPID) + polish analíticas rollup  
+2. ~~Import CSV/OFX + sugerencias de suscripción~~ (fase 3)  
+3. ~~Cashflow + presupuestos/MSI~~ (fase 3)  
+4. ~~Quincena OS: hub, onboarding, smart-pay deep-link, plan de agente~~ (fase 4)  
+5. Push (VAPID) + polish analíticas rollup  
 
-Ver [`docs/ai.md`](docs/ai.md), [`docs/projects.md`](docs/projects.md), [`docs/cashflow.md`](docs/cashflow.md), [`docs/phase3.md`](docs/phase3.md).  
+Ver [`docs/ai.md`](docs/ai.md), [`docs/projects.md`](docs/projects.md), [`docs/cashflow.md`](docs/cashflow.md), [`docs/phase3.md`](docs/phase3.md), [`docs/phase4.md`](docs/phase4.md).  
 
 
 ## Licencia

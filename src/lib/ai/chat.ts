@@ -15,6 +15,7 @@ export type ChatSseEvent =
   | { conversationId: string }
   | { token: string }
   | { tool: { name: string; status: "start" | "done" } }
+  | { toolResult: { name: string; result: unknown } }
   | { done: true; conversationId: string }
   | { error: string };
 
@@ -127,6 +128,7 @@ export async function runCashishChat(opts: {
           );
           resultText =
             typeof result === "string" ? result : JSON.stringify(result);
+          opts.onEvent({ toolResult: { name: tc.name, result } });
         } catch (err) {
           resultText = JSON.stringify({
             error: err instanceof Error ? err.message : "Error de tool",

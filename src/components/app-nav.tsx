@@ -5,41 +5,107 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { APP_NAV, isNavActive } from "@/lib/nav";
+import {
+  APP_NAV_MORE,
+  APP_NAV_PRIMARY,
+  isNavActive,
+  type AppNavItem,
+} from "@/lib/nav";
 
-function NavLinks({
+function NavLink({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: AppNavItem;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  const active = isNavActive(
+    pathname,
+    item.href,
+    "exact" in item ? item.exact : false,
+  );
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
+      className={
+        active
+          ? "rounded-lg bg-[var(--accent-soft)] px-3 py-2.5 font-medium text-[var(--accent-deep)]"
+          : "rounded-lg px-3 py-2.5 text-[var(--muted)] transition-colors hover:bg-[var(--wash)] hover:text-[var(--ink)]"
+      }
+    >
+      {item.label}
+    </Link>
+  );
+}
+
+function NavSections({
   pathname,
   onNavigate,
   className = "",
+  compactPrimary = false,
 }: {
   pathname: string;
   onNavigate?: () => void;
   className?: string;
+  compactPrimary?: boolean;
 }) {
   return (
     <div className={className}>
-      {APP_NAV.map((item) => {
-        const active = isNavActive(
-          pathname,
-          item.href,
-          "exact" in item ? item.exact : false,
-        );
-        return (
-          <Link
+      <div
+        className={
+          compactPrimary
+            ? "flex flex-wrap items-center gap-0.5"
+            : "flex flex-col gap-1"
+        }
+      >
+        {APP_NAV_PRIMARY.map((item) => (
+          <NavLink
             key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            onClick={onNavigate}
-            className={
-              active
-                ? "rounded-lg bg-[var(--accent-soft)] px-3 py-2.5 font-medium text-[var(--accent-deep)]"
-                : "rounded-lg px-3 py-2.5 text-[var(--muted)] transition-colors hover:bg-[var(--wash)] hover:text-[var(--ink)]"
-            }
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+            item={item}
+            pathname={pathname}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+      <div className={compactPrimary ? "relative ml-1" : "mt-4"}>
+        {compactPrimary ? (
+          <details className="group relative">
+            <summary className="cursor-pointer list-none rounded-lg px-3 py-2.5 text-[var(--muted)] hover:bg-[var(--wash)] hover:text-[var(--ink)] [&::-webkit-details-marker]:hidden">
+              Más
+            </summary>
+            <div className="absolute right-0 z-40 mt-1 min-w-[12rem] rounded-xl border border-[var(--line)] bg-[var(--surface)] p-2 shadow-lg">
+              {APP_NAV_MORE.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
+          </details>
+        ) : (
+          <>
+            <p className="mb-1 px-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+              Más
+            </p>
+            <div className="flex flex-col gap-1">
+              {APP_NAV_MORE.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -114,10 +180,9 @@ export function AppNav({ signOut }: { signOut: () => Promise<void> }) {
                 className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3 text-sm"
                 aria-label="Navegación principal"
               >
-                <NavLinks
+                <NavSections
                   pathname={pathname}
                   onNavigate={() => setOpen(false)}
-                  className="flex flex-col gap-1"
                 />
               </nav>
               <form
@@ -145,10 +210,7 @@ export function AppNav({ signOut }: { signOut: () => Promise<void> }) {
         aria-label="Navegación principal"
         data-testid="desktop-nav"
       >
-        <NavLinks
-          pathname={pathname}
-          className="flex flex-wrap items-center gap-0.5"
-        />
+        <NavSections pathname={pathname} compactPrimary />
         <ThemeToggle compact />
         <form action={signOut}>
           <button
@@ -160,7 +222,10 @@ export function AppNav({ signOut }: { signOut: () => Promise<void> }) {
         </form>
       </nav>
 
-      <div className="flex items-center gap-1 lg:hidden" data-testid="mobile-nav-trigger">
+      <div
+        className="flex items-center gap-1 lg:hidden"
+        data-testid="mobile-nav-trigger"
+      >
         <ThemeToggle compact />
         <button
           type="button"

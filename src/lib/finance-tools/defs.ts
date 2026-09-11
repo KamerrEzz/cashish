@@ -11,6 +11,8 @@ import {
   suggestPayToAvoidInterest,
 } from "@/lib/cashflow/engine";
 import { merchantKey } from "@/lib/merchant";
+import { loadQuincenaSnapshot } from "@/lib/quincena";
+import { buildQuincenaPlanActions } from "@/lib/quincena-plan";
 import type { Database } from "@/lib/database.types";
 import type { Admin, CashishToolDef } from "./types";
 
@@ -1412,6 +1414,7 @@ export function buildCashishTools(): CashishToolDef[] {
           "cashish_upcoming_events",
           "cashish_list_tools_help",
           "cashish_cashflow_forecast",
+          "cashish_quincena_plan",
         ],
         accounts: [
           "cashish_list_accounts",
@@ -1453,11 +1456,13 @@ export function buildCashishTools(): CashishToolDef[] {
           "cashish_list_budgets",
           "cashish_cashflow_forecast",
         ],
+        phase4: ["cashish_quincena_plan"],
         reminders: ["cashish_list_reminders", "cashish_dismiss_reminder"],
         notes: [
           "Montos siempre como string MXN con hasta 2 decimales.",
           "TDC: balance_cents = deuda (owed). available = limit - owed.",
           "Pagos a tarjeta: preferir cashish_pay_credit_card o cashish_pay_to_avoid_interest (confirm:false = preview).",
+          "Quincena: cashish_quincena_plan arma el ritual con acciones confirmables en la UI.",
           "Cortes/pagos: list_statement_periods → close_statement → pay → mark_statement_paid.",
           "Forecast: cashish_cashflow_forecast. Import/tickets: UI /app/import y /app/receipts.",
         ],
@@ -1827,6 +1832,127 @@ export function buildCashishTools(): CashishToolDef[] {
             remaining_cents: b.monthly_limit_cents - spent,
           };
         }),
+      };
+    },
+  },
+  {
+    name: "cashish_quincena_plan",
+    title: "Quincena plan",
+    description:
+      "Arma el plan de quincena: veredicto de liquidez + previews de pago TDC (sin ejecutar). Las acciones llevan confirm=true para la UI.",
+    inputSchema: z
+      .object({
+        days: z.number().int().min(14).max(60).default(30),
+      })
+      .strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    execute: async (ctx, args) => {
+      const days = (args as { days?: number }).days ?? 30;
+      const supabase = ctx.db();
+      const snapshot = await loadQuincenaSnapshot(supabase, ctx.projectId, days);
+      const { data: liquidAccounts } = await supabase
+        .from("accounts")
+        .select("id, name, balance_cents, type")
+        .eq("project_id", ctx.projectId)
+        .eq("is_archived", false)
+        .neq("type", "credit_card")
+        .order("balance_cents", { ascending: false });
+      const preferredFrom = liquidAccounts?.[0]?.id ?? null;
+
+      const payTargets = snapshot.primaryPay
+        ? [snapshot.primaryPay]
+        : [];
+
+      // Also include other cards with avoid-interest > 0 due in window
+      const { data: cards } = await supabase
+        .from("accounts")
+        .select("id, name, balance_cents, type")
+        .eq("project_id", ctx.projectId)
+        .eq("is_archived", false)
+        .eq("type", "credit_card");
+
+      const previews: Array<{
+        accountId: string;
+        accountName: string;
+        mode: "avoid_interest" | "minimum";
+        amountCents: number;
+        dueOn: string;
+        fromAccountId: string | null;
+      }> = [];
+      const seen = new Set<string>();
+
+      for (const pay of payTargets) {
+        seen.add(pay.accountId);
+        previews.push({
+          accountId: pay.accountId,
+          accountName: pay.accountName,
+          mode: pay.mode,
+          amountCents: pay.avoidInterestCents,
+          dueOn: pay.dueOn,
+          fromAccountId: preferredFrom,
+        });
+      }
+
+      for (const card of cards ?? []) {
+        if (seen.has(card.id)) continue;
+        const [{ data: profile }, { data: closed }, { data: open }] =
+          await Promise.all([
+            supabase
+              .from("credit_card_profiles")
+              .select("*")
+              .eq("account_id", card.id)
+              .eq("project_id", ctx.projectId)
+              .maybeSingle(),
+            supabase
+              .from("statement_periods")
+              .select("*")
+              .eq("account_id", card.id)
+              .eq("project_id", ctx.projectId)
+              .eq("status", "closed")
+              .order("closes_on", { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+            supabase
+              .from("statement_periods")
+              .select("*")
+              .eq("account_id", card.id)
+              .eq("project_id", ctx.projectId)
+              .eq("status", "open")
+              .maybeSingle(),
+          ]);
+        if (!profile) continue;
+        const suggestion = suggestPayToAvoidInterest({
+          closingBalanceCents: closed?.closing_balance_cents ?? null,
+          currentDebtCents: card.balance_cents,
+          minimumCents:
+            closed?.minimum_payment_cents ||
+            open?.minimum_payment_cents ||
+            profile.minimum_payment_cents,
+        });
+        if (suggestion.avoidInterestCents <= 0) continue;
+        const dueOn = closed?.due_on ?? open?.due_on ?? snapshot.today;
+        if (dueOn < snapshot.today || dueOn > snapshot.window.end) continue;
+        previews.push({
+          accountId: card.id,
+          accountName: card.name,
+          mode: "avoid_interest" as const,
+          amountCents: suggestion.avoidInterestCents,
+          dueOn,
+          fromAccountId: preferredFrom,
+        });
+      }
+
+      const plan = buildQuincenaPlanActions(snapshot, previews);
+      return {
+        ...plan,
+        forecast: {
+          status: snapshot.forecast.status,
+          starting_liquid: formatMxn(money(snapshot.forecast.startingLiquidCents)),
+          ending_liquid: formatMxn(money(snapshot.forecast.endingLiquidCents)),
+          min_balance: formatMxn(money(snapshot.forecast.minBalanceCents)),
+          first_shortfall_on: snapshot.forecast.firstShortfallOn,
+          shortfall: formatMxn(money(snapshot.forecast.shortfallCents)),
+        },
       };
     },
   },

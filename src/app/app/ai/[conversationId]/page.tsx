@@ -15,21 +15,29 @@ export default async function AiConversationPage({
   const { supabase, user, project } = await requireProject();
   const meta = await getUserAiMeta(supabase);
 
-  const [{ data: conversations }, { data: convo }] = await Promise.all([
-    supabase
-      .from("ai_conversations")
-      .select("id, title, updated_at")
-      .eq("project_id", project.id)
-      .order("updated_at", { ascending: false })
-      .limit(40),
-    supabase
-      .from("ai_conversations")
-      .select("id, title")
-      .eq("id", conversationId)
-      .eq("user_id", user.id)
-      .eq("project_id", project.id)
-      .maybeSingle(),
-  ]);
+  const [{ data: conversations }, { data: convo }, { data: liquid }] =
+    await Promise.all([
+      supabase
+        .from("ai_conversations")
+        .select("id, title, updated_at")
+        .eq("project_id", project.id)
+        .order("updated_at", { ascending: false })
+        .limit(40),
+      supabase
+        .from("ai_conversations")
+        .select("id, title")
+        .eq("id", conversationId)
+        .eq("user_id", user.id)
+        .eq("project_id", project.id)
+        .maybeSingle(),
+      supabase
+        .from("accounts")
+        .select("id, name")
+        .eq("project_id", project.id)
+        .eq("is_archived", false)
+        .neq("type", "credit_card")
+        .order("name"),
+    ]);
 
   if (!convo) notFound();
 
@@ -57,6 +65,7 @@ export default async function AiConversationPage({
           <AiChat
             conversationId={conversationId}
             initialMessages={messages ?? []}
+            liquidSources={liquid ?? []}
           />
         </div>
       )}

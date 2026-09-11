@@ -170,6 +170,20 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      {(accounts ?? []).length === 0 ? (
+        <Panel className="border-[var(--accent)]/25 bg-[var(--accent-soft)]/40">
+          <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
+            Empieza tu quincena
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Configura liquidez, tarjeta e ingreso en unos minutos.
+          </p>
+          <Link href="/app/onboarding" className={`${btnPrimary} mt-4 inline-flex`}>
+            Ir al onboarding
+          </Link>
+        </Panel>
+      ) : null}
+
       {(reminders ?? []).length > 0 ? (
         <Panel className="border-[var(--warn)]/25 bg-[var(--warn-soft)]">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -255,16 +269,16 @@ export default async function DashboardPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
-              Flujo de caja
+              Tu quincena
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {coverageOk
-                ? "Mínimos de TDC cubiertos con tu liquidez actual"
-                : "Revisa si alcanzas los recurrentes y cortes"}
+                ? "Veredicto, runway y pagos TDC en un solo ritual"
+                : "Hay presión de liquidez — revisa el plan de quincena"}
             </p>
           </div>
-          <Link href="/app/cashflow" className={btnGhost}>
-            Ver proyección
+          <Link href="/app/quincena" className={btnPrimary}>
+            Abrir quincena
           </Link>
         </div>
       </Panel>
@@ -313,9 +327,14 @@ export default async function DashboardPage() {
             {liquid.length === 0 ? (
               <li className="py-3 text-sm text-[var(--muted)]">
                 Sin cuentas líquidas.{" "}
+                <Link className="underline underline-offset-2" href="/app/onboarding">
+                  Completa el onboarding
+                </Link>{" "}
+                o{" "}
                 <Link className="underline underline-offset-2" href="/app/accounts/new">
-                  Agrega una
+                  agrega una
                 </Link>
+                .
               </li>
             ) : (
               liquid.map((a) => (
@@ -373,8 +392,12 @@ export default async function DashboardPage() {
           <Panel>
             <p className="text-sm text-[var(--muted)]">
               Aún no tienes TDC.{" "}
+              <Link href="/app/onboarding" className="underline underline-offset-2">
+                Configura Cashish
+              </Link>{" "}
+              o{" "}
               <Link href="/app/accounts/new" className="underline underline-offset-2">
-                Agrega tu primera tarjeta
+                agrega tu primera tarjeta
               </Link>{" "}
               con límite, día de corte y día de pago.
             </p>

@@ -42,12 +42,15 @@ export function PageHeader({
 export function Panel({
   children,
   className = "",
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={`rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_1px_0_rgba(20,40,30,0.04)] sm:p-5 md:p-6 ${className}`}
     >
       {children}

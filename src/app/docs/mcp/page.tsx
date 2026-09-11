@@ -39,6 +39,7 @@ const GROUPS: { title: string; prefix: string[] }[] = [
       "cashish_list_transfers",
       "cashish_create_transfer",
       "cashish_pay_credit_card",
+      "cashish_pay_to_avoid_interest",
     ],
   },
   {
@@ -58,6 +59,17 @@ const GROUPS: { title: string; prefix: string[] }[] = [
       "cashish_create_subscription",
       "cashish_update_subscription",
       "cashish_toggle_subscription",
+      "cashish_suggest_subscriptions",
+    ],
+  },
+  {
+    title: "Flujo / quincena / fase 3–4",
+    prefix: [
+      "cashish_cashflow_forecast",
+      "cashish_quincena_plan",
+      "cashish_list_receipts",
+      "cashish_list_installments",
+      "cashish_list_budgets",
     ],
   },
   {

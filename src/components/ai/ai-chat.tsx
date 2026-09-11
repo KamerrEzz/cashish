@@ -2,21 +2,32 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { btnPrimary, inputClass } from "@/components/ui";
+import { btnGhost, btnPrimary, inputClass } from "@/components/ui";
+import {
+  QuincenaActionCards,
+  extractQuincenaActions,
+} from "@/components/ai/quincena-action-cards";
+import type { QuincenaPlanAction } from "@/lib/quincena-plan";
+
+const QUINCENA_PROMPT =
+  "Arma mi plan de quincena: veredicto de liquidez y pagos TDC sugeridos para confirmar.";
 
 type Msg = {
   id: string;
   role: "user" | "assistant";
   content: string;
   toolHint?: string | null;
+  actions?: QuincenaPlanAction[];
 };
 
 export function AiChat({
   conversationId,
   initialMessages,
+  liquidSources = [],
 }: {
   conversationId: string | null;
   initialMessages: { id: string; role: string; content: string }[];
+  liquidSources?: { id: string; name: string }[];
 }) {
   const [messages, setMessages] = useState<Msg[]>(
     initialMessages
@@ -37,9 +48,7 @@ export function AiChat({
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, toolHint]);
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    const question = input.trim();
+  async function sendMessage(question: string) {
     if (!question || busy) return;
     setInput("");
     setBusy(true);
@@ -83,6 +92,7 @@ export function AiChat({
     const decoder = new TextDecoder();
     let buffer = "";
     let assistant = "";
+    let pendingActions: QuincenaPlanAction[] = [];
     const assistantId = crypto.randomUUID();
     setMessages((prev) => [
       ...prev,
@@ -105,6 +115,7 @@ export function AiChat({
             done?: boolean;
             error?: string;
             tool?: { name: string; status: string };
+            toolResult?: { name: string; result: unknown };
           };
           if (json.conversationId && json.conversationId !== activeId) {
             setActiveId(json.conversationId);
@@ -121,6 +132,19 @@ export function AiChat({
                 : null,
             );
           }
+          if (json.toolResult) {
+            const extracted = extractQuincenaActions(json.toolResult.result);
+            if (extracted.length > 0) {
+              pendingActions = extracted;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, actions: pendingActions }
+                    : m,
+                ),
+              );
+            }
+          }
           if (json.error) {
             assistant = json.error;
             setMessages((prev) =>
@@ -134,7 +158,16 @@ export function AiChat({
             const snapshot = assistant;
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === assistantId ? { ...m, content: snapshot } : m,
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: snapshot,
+                      actions:
+                        pendingActions.length > 0
+                          ? pendingActions
+                          : m.actions,
+                    }
+                  : m,
               ),
             );
           }
@@ -145,6 +178,11 @@ export function AiChat({
     }
     setToolHint(null);
     setBusy(false);
+  }
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    await sendMessage(input.trim());
   }
 
   return (
@@ -164,8 +202,27 @@ export function AiChat({
               <li>· ¿Qué suscripciones cobran este mes?</li>
               <li>· Resume mis gastos de la semana</li>
             </ul>
+            <button
+              type="button"
+              className={`${btnGhost} mt-5`}
+              disabled={busy}
+              onClick={() => sendMessage(QUINCENA_PROMPT)}
+            >
+              Arma mi plan de quincena
+            </button>
           </div>
-        ) : null}
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={btnGhost}
+              disabled={busy}
+              onClick={() => sendMessage(QUINCENA_PROMPT)}
+            >
+              Arma mi plan de quincena
+            </button>
+          </div>
+        )}
         {messages.map((m) => (
           <article
             key={m.id}
@@ -176,6 +233,12 @@ export function AiChat({
             }`}
           >
             <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+            {m.role === "assistant" && m.actions && m.actions.length > 0 ? (
+              <QuincenaActionCards
+                actions={m.actions}
+                sources={liquidSources}
+              />
+            ) : null}
           </article>
         ))}
         {toolHint ? (

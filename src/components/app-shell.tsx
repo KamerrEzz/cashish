@@ -1,12 +1,16 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { ProjectSwitcher } from "@/components/project-switcher";
+import { maybeRedirectToOnboarding } from "@/lib/onboarding-gate";
 import { requireProject } from "@/lib/projects";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const { project, projects } = await requireProject();
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  await maybeRedirectToOnboarding(pathname);
 
   async function signOut() {
     "use server";

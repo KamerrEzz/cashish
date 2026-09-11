@@ -8,6 +8,15 @@ import { projectCashflow, suggestPayToAvoidInterest } from "@/lib/cashflow/engin
 const LEAD_DAYS = 3;
 const CASHFLOW_HORIZON = 45;
 
+function hubUrl(path = "/app/quincena") {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  return base ? `${base}${path}` : path;
+}
+
+function withHubLink(body: string, path = "/app/quincena") {
+  return `${body} Abre tu quincena: ${hubUrl(path)}`;
+}
+
 type ReminderInsert = {
   user_id: string;
   project_id: string;
@@ -145,8 +154,10 @@ export async function materializeAndSendReminders() {
           project_id: period.project_id,
           event_type: "payment_due",
           channel,
-          title: `Pago de tarjeta: ${account.name}`,
-          body: `Fecha límite ${period.due_on}. Saldo de referencia ${formatMxn(money(balance))}. Mínimo ${formatMxn(money(period.minimum_payment_cents))}.`,
+          title: `Tu quincena · Pago de tarjeta: ${account.name}`,
+          body: withHubLink(
+            `Fecha límite ${period.due_on}. Saldo de referencia ${formatMxn(money(balance))}. Mínimo ${formatMxn(money(period.minimum_payment_cents))}.`,
+          ),
           due_on: period.due_on,
           related_account_id: period.account_id,
           related_statement_id: period.id,
@@ -335,8 +346,10 @@ export async function materializeAndSendReminders() {
           project_id: projectId,
           event_type: "cashflow_shortfall",
           channel,
-          title: "Posible faltante de liquidez",
-          body: `Tu proyección a ${CASHFLOW_HORIZON} días muestra faltante desde ${forecast.firstShortfallOn} (~${formatMxn(money(forecast.shortfallCents))}). Revisa Flujo.`,
+          title: "Tu quincena · Posible faltante de liquidez",
+          body: withHubLink(
+            `Tu proyección a ${CASHFLOW_HORIZON} días muestra faltante desde ${forecast.firstShortfallOn} (~${formatMxn(money(forecast.shortfallCents))}).`,
+          ),
           due_on: forecast.firstShortfallOn,
           dedupe_key: dedupeKey({
             userId: member.user_id,
