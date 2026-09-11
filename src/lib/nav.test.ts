@@ -21,6 +21,7 @@ describe("isNavActive", () => {
       "Analíticas",
       "Suscripciones",
       "Avisos",
+      "Asistente",
       "Agentes",
     ]);
   });

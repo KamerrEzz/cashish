@@ -92,18 +92,22 @@ npm run build
 | `SUPABASE_SERVICE_ROLE_KEY` | Cron + MCP (secreto) |
 | `CRON_SECRET` | Auth del job `/api/cron/reminders` |
 | `NEXT_PUBLIC_APP_URL` | URL pública (redirects / snippets MCP) |
+| `CASHISH_APP_SECRET` | Wrap AES (≥32) para claves BYOK del asistente |
 | `RESEND_API_KEY` | Emails de recordatorio (opcional) |
 
 ## Estructura
 
 ```
 src/
-  app/           # UI + API (mcp, cron, auth)
+  app/           # UI + API (ai, mcp, cron, auth)
   components/
   lib/
     money.ts     # aritmética segura en centavos
-    mcp/         # auth de claves + tools MCP
+    ai/          # BYOK provider, chat loop, prompts
+    finance-tools/ # registry compartido MCP + asistente
+    mcp/         # auth de claves + wrapper MCP
     supabase/
+docs/ai.md
 supabase/migrations/
 ```
 

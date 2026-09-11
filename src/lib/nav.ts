@@ -5,6 +5,7 @@ export const APP_NAV = [
   { href: "/app/analytics", label: "Analíticas" },
   { href: "/app/subscriptions", label: "Suscripciones" },
   { href: "/app/reminders", label: "Avisos" },
+  { href: "/app/ai", label: "Asistente" },
   { href: "/app/agents", label: "Agentes" },
 ] as const;
 

@@ -434,6 +434,158 @@ export type Database = {
           },
         ];
       };
+      user_ai_credentials: {
+        Row: {
+          user_id: string;
+          ciphertext: string;
+          last4: string;
+          provider: string;
+          base_url: string;
+          chat_model: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          ciphertext: string;
+          last4: string;
+          provider?: string;
+          base_url: string;
+          chat_model: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          ciphertext?: string;
+          last4?: string;
+          provider?: string;
+          base_url?: string;
+          chat_model?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_ai_credentials_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversations_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          role: string;
+          content: string;
+          tool_calls: Json | null;
+          tool_call_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          role: string;
+          content?: string;
+          tool_calls?: Json | null;
+          tool_call_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          role?: string;
+          content?: string;
+          tool_calls?: Json | null;
+          tool_call_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_usage_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          model: string | null;
+          prompt_tokens: number;
+          completion_tokens: number;
+          estimated_usd: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind?: string;
+          model?: string | null;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          estimated_usd?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          kind?: string;
+          model?: string | null;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          estimated_usd?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_events_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -457,6 +609,34 @@ export type Database = {
       mcp_resolve_api_key: {
         Args: { p_key_hash: string };
         Returns: { user_id: string; key_id: string }[];
+      };
+      save_own_ai_credential: {
+        Args: {
+          p_provider: string;
+          p_base_url: string;
+          p_chat_model: string;
+          p_ciphertext: string | null;
+          p_last4: string | null;
+        };
+        Returns: undefined;
+      };
+      own_ai_credential_meta: {
+        Args: Record<string, never>;
+        Returns: {
+          last4: string;
+          updated_at: string;
+          provider: string;
+          base_url: string;
+          chat_model: string;
+        }[];
+      };
+      own_ai_credential_cipher: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+      delete_own_ai_credential: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
     };
     Enums: {
