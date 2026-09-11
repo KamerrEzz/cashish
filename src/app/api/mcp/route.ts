@@ -25,7 +25,7 @@ async function handle(req: Request) {
           version: "1.0.0",
         },
         instructions:
-          "Cashish personal finance for Mexico/MXN. Prefer cashish_dashboard first, then mutate with create_transaction / pay_credit_card / create_subscription. Amounts are MXN decimal strings.",
+          "Cashish personal finance (Mexico/MXN). Start with cashish_list_tools_help or cashish_dashboard. Amounts are MXN decimal strings. Credit card balance_cents is debt owed; available = limit - owed. Prefer cashish_pay_credit_card for card payments.",
       },
     );
 

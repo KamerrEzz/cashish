@@ -61,7 +61,7 @@ Además recuerda **qué tarjeta cobra Netflix** y cuándo toca el siguiente cobr
 }
 ```
 
-Herramientas: `cashish_dashboard`, `cashish_list_accounts`, `cashish_list_transactions`, `cashish_create_transaction`, `cashish_pay_credit_card`, `cashish_list_subscriptions`, `cashish_create_subscription`, `cashish_list_reminders`.
+Herramientas (27): panorama (`cashish_dashboard`, `cashish_upcoming_events`), cuentas CRUD + perfil TDC, movimientos/búsqueda, transferencias y pago TDC, cortes (abrir/cerrar/marcar pagado), suscripciones y recordatorios. Usa `cashish_list_tools_help` desde el agente.
 
 > El endpoint MCP requiere `SUPABASE_SERVICE_ROLE_KEY` en el entorno del servidor (nunca en el cliente).
 

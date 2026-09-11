@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/mcp-keys";
 import { SubmitButton } from "@/components/submit-button";
 import { Field, inputClass, btnGhost, btnPrimary, Panel } from "@/components/ui";
+import { TOOL_NAMES } from "@/lib/mcp/tool-names";
 
 type KeyRow = {
   id: string;
@@ -177,16 +178,7 @@ export function AgentsPanel({
       <Panel className="border-[var(--accent)]/20">
         <h2 className="font-semibold">Herramientas disponibles</h2>
         <ul className="mt-3 grid gap-2 text-sm text-[var(--muted)] sm:grid-cols-2">
-          {[
-            "cashish_dashboard",
-            "cashish_list_accounts",
-            "cashish_list_transactions",
-            "cashish_create_transaction",
-            "cashish_pay_credit_card",
-            "cashish_list_subscriptions",
-            "cashish_create_subscription",
-            "cashish_list_reminders",
-          ].map((name) => (
+          {TOOL_NAMES.map((name) => (
             <li key={name}>
               <code className="text-[var(--ink)]">{name}</code>
             </li>

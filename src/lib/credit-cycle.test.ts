@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   availableCreditCents,
   buildInitialStatementWindow,
+  buildNextStatementWindow,
 } from "./credit-cycle";
 
 describe("credit-cycle", () => {
@@ -18,5 +19,12 @@ describe("credit-cycle", () => {
     expect(window.closesOn).toBe("2026-09-15");
     expect(window.dueOn).toBe("2026-09-28");
     expect(window.opensOn < window.closesOn).toBe(true);
+  });
+
+  it("builds next window after a close", () => {
+    const next = buildNextStatementWindow("2026-09-15", 15, 28);
+    expect(next.opensOn).toBe("2026-09-16");
+    expect(next.closesOn).toBe("2026-10-15");
+    expect(next.dueOn).toBe("2026-10-28");
   });
 });

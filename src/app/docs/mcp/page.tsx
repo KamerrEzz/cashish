@@ -1,11 +1,70 @@
 import Link from "next/link";
 import { btnPrimary, btnGhost, Panel } from "@/components/ui";
+import { TOOL_NAMES } from "@/lib/mcp/tool-names";
 
 export const metadata = {
   title: "Cashish MCP — Agentes",
   description:
     "Conecta agentes de IA a tus finanzas personales con Model Context Protocol.",
 };
+
+const GROUPS: { title: string; prefix: string[] }[] = [
+  {
+    title: "Panorama",
+    prefix: ["cashish_dashboard", "cashish_upcoming_events", "cashish_list_tools_help"],
+  },
+  {
+    title: "Cuentas",
+    prefix: [
+      "cashish_list_accounts",
+      "cashish_get_account",
+      "cashish_create_account",
+      "cashish_rename_account",
+      "cashish_archive_account",
+      "cashish_update_credit_card_profile",
+    ],
+  },
+  {
+    title: "Movimientos",
+    prefix: [
+      "cashish_list_transactions",
+      "cashish_search_transactions",
+      "cashish_get_transaction",
+      "cashish_create_transaction",
+    ],
+  },
+  {
+    title: "Transferencias y pagos TDC",
+    prefix: [
+      "cashish_list_transfers",
+      "cashish_create_transfer",
+      "cashish_pay_credit_card",
+    ],
+  },
+  {
+    title: "Cortes / estados de cuenta",
+    prefix: [
+      "cashish_list_statement_periods",
+      "cashish_get_open_statement",
+      "cashish_close_statement",
+      "cashish_mark_statement_paid",
+    ],
+  },
+  {
+    title: "Suscripciones",
+    prefix: [
+      "cashish_list_subscriptions",
+      "cashish_get_subscription",
+      "cashish_create_subscription",
+      "cashish_update_subscription",
+      "cashish_toggle_subscription",
+    ],
+  },
+  {
+    title: "Recordatorios",
+    prefix: ["cashish_list_reminders", "cashish_dismiss_reminder"],
+  },
+];
 
 export default function McpDocsPage() {
   const mcpUrl = "https://cashish-beta.vercel.app/api/mcp";
@@ -33,15 +92,14 @@ export default function McpDocsPage() {
           Agentes que entienden tu crédito
         </h1>
         <p className="mt-4 text-lg text-[var(--muted)]">
-          Expón cuentas, cortes, pagos y suscripciones a Cursor, Claude u otros
-          clientes MCP con una clave personal. Sin tratar la TDC como débito.
+          {TOOL_NAMES.length} herramientas para cuentas, cortes, pagos,
+          suscripciones y recordatorios — sin tratar la TDC como débito.
         </p>
 
         <Panel className="mt-10">
           <h2 className="text-lg font-semibold">1. Crea una clave</h2>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Entra a la app → <strong>Agentes</strong> → crea una clave. Se
-            muestra una sola vez (`csh_…`).
+            Entra a la app → <strong>Agentes</strong> → crea una clave (`csh_…`).
           </p>
           <Link href="/app/agents" className={`${btnPrimary} mt-4`}>
             Ir a Agentes
@@ -50,8 +108,7 @@ export default function McpDocsPage() {
 
         <Panel className="mt-4">
           <h2 className="text-lg font-semibold">2. Conecta el cliente</h2>
-          <p className="mt-2 text-sm text-[var(--muted)]">Endpoint:</p>
-          <code className="mt-1 block rounded-lg bg-[var(--wash)] px-3 py-2 text-sm">
+          <code className="mt-2 block rounded-lg bg-[var(--wash)] px-3 py-2 text-sm">
             {mcpUrl}
           </code>
           <pre className="mt-4 overflow-x-auto rounded-xl bg-[var(--wash)] p-4 text-xs">{`{
@@ -66,32 +123,30 @@ export default function McpDocsPage() {
 }`}</pre>
         </Panel>
 
+        {GROUPS.map((group) => (
+          <Panel key={group.title} className="mt-4">
+            <h2 className="text-lg font-semibold">{group.title}</h2>
+            <ul className="mt-3 space-y-1 text-sm text-[var(--muted)]">
+              {group.prefix.map((name) => (
+                <li key={name}>
+                  <code className="text-[var(--ink)]">{name}</code>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        ))}
+
         <Panel className="mt-4">
-          <h2 className="text-lg font-semibold">3. Herramientas</h2>
-          <ul className="mt-3 space-y-2 text-sm text-[var(--muted)]">
+          <h2 className="text-lg font-semibold">Convenciones</h2>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[var(--muted)]">
+            <li>Montos como string MXN: <code className="text-[var(--ink)]">&quot;229.50&quot;</code></li>
             <li>
-              <code className="text-[var(--ink)]">cashish_dashboard</code> —
-              panorama de liquidez y TDC
+              En TDC, <code className="text-[var(--ink)]">balance_cents</code> es
+              deuda; disponible = límite − deuda
             </li>
             <li>
-              <code className="text-[var(--ink)]">cashish_list_accounts</code> /
-              <code className="text-[var(--ink)]"> cashish_list_transactions</code>
-            </li>
-            <li>
-              <code className="text-[var(--ink)]">cashish_create_transaction</code>{" "}
-              — gasto o ingreso
-            </li>
-            <li>
-              <code className="text-[var(--ink)]">cashish_pay_credit_card</code> —
-              pago vinculado
-            </li>
-            <li>
-              <code className="text-[var(--ink)]">cashish_list_subscriptions</code>{" "}
-              /
-              <code className="text-[var(--ink)]"> cashish_create_subscription</code>
-            </li>
-            <li>
-              <code className="text-[var(--ink)]">cashish_list_reminders</code>
+              Empieza con <code className="text-[var(--ink)]">cashish_list_tools_help</code>{" "}
+              o <code className="text-[var(--ink)]">cashish_dashboard</code>
             </li>
           </ul>
         </Panel>

@@ -47,6 +47,35 @@ export function buildInitialStatementWindow(
   };
 }
 
+/** After closing a statement on `previousClosesOn`, compute the next open cycle. */
+export function buildNextStatementWindow(
+  previousClosesOn: string,
+  closeDay: number,
+  dueDay: number,
+): { opensOn: string; closesOn: string; dueOn: string } {
+  const prevClose = startOfDay(new Date(`${previousClosesOn}T12:00:00`));
+  const opens = new Date(prevClose);
+  opens.setDate(opens.getDate() + 1);
+
+  let closes = clampDay(opens.getFullYear(), opens.getMonth(), closeDay);
+  if (!isBefore(prevClose, closes)) {
+    const next = addMonths(closes, 1);
+    closes = clampDay(next.getFullYear(), next.getMonth(), closeDay);
+  }
+
+  let due = clampDay(closes.getFullYear(), closes.getMonth(), dueDay);
+  if (isBefore(due, closes) || isEqual(due, closes)) {
+    const next = addMonths(due, 1);
+    due = clampDay(next.getFullYear(), next.getMonth(), dueDay);
+  }
+
+  return {
+    opensOn: format(opens, "yyyy-MM-dd"),
+    closesOn: format(closes, "yyyy-MM-dd"),
+    dueOn: format(due, "yyyy-MM-dd"),
+  };
+}
+
 export function availableCreditCents(
   creditLimitCents: number,
   balanceOwedCents: number,
