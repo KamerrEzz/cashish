@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { parseMxnInput } from "@/lib/money";
+import { asCurrency, parseMoneyInput } from "@/lib/money";
 import { merchantKey } from "@/lib/merchant";
 import { requireProjectWriter } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
@@ -38,25 +38,29 @@ export async function createTransaction(
     return { ok: false, error: "Datos del movimiento inválidos." };
   }
 
-  let amountCents: number;
-  try {
-    amountCents = parseMxnInput(parsed.data.amount).amount;
-  } catch {
-    return { ok: false, error: "Monto inválido." };
-  }
-  if (amountCents <= 0) {
-    return { ok: false, error: "El monto debe ser mayor a 0." };
-  }
-
   const { data: account, error: accountError } = await supabase
     .from("accounts")
-    .select("id, type, balance_cents")
+    .select("id, type, balance_cents, currency")
     .eq("id", parsed.data.accountId)
     .eq("project_id", project.id)
     .single();
 
   if (accountError || !account) {
     return { ok: false, error: "Cuenta no encontrada." };
+  }
+
+  const currency = asCurrency(account.currency);
+  let amountCents: number;
+  try {
+    amountCents = parseMoneyInput(parsed.data.amount, currency).amount;
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Monto inválido.",
+    };
+  }
+  if (amountCents <= 0) {
+    return { ok: false, error: "El monto debe ser mayor a 0." };
   }
 
   let statementPeriodId: string | null = null;
@@ -93,6 +97,7 @@ export async function createTransaction(
     account_id: account.id,
     type: parsed.data.type,
     amount_cents: amountCents,
+    currency,
     merchant: parsed.data.merchant ?? null,
     merchant_key: merchantKey(parsed.data.merchant),
     description: parsed.data.description ?? null,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { parseMxnInput } from "@/lib/money";
+import { asCurrency, parseMoneyInput } from "@/lib/money";
 import { requireProjectWriter } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
 
@@ -31,11 +31,37 @@ export async function createLinkedTransfer(
     return { ok: false, error: "Datos de transferencia inválidos." };
   }
 
+  const [{ data: fromAcc }, { data: toAcc }] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, currency")
+      .eq("id", parsed.data.fromAccountId)
+      .maybeSingle(),
+    supabase
+      .from("accounts")
+      .select("id, currency")
+      .eq("id", parsed.data.toAccountId)
+      .maybeSingle(),
+  ]);
+  if (!fromAcc || !toAcc) {
+    return { ok: false, error: "Cuenta no encontrada." };
+  }
+  if (asCurrency(fromAcc.currency) !== asCurrency(toAcc.currency)) {
+    return {
+      ok: false,
+      error: "Solo puedes transferir entre cuentas de la misma moneda.",
+    };
+  }
+  const currency = asCurrency(fromAcc.currency);
+
   let amountCents: number;
   try {
-    amountCents = parseMxnInput(parsed.data.amount).amount;
-  } catch {
-    return { ok: false, error: "Monto inválido." };
+    amountCents = parseMoneyInput(parsed.data.amount, currency).amount;
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Monto inválido.",
+    };
   }
   if (amountCents <= 0) {
     return { ok: false, error: "El monto debe ser mayor a 0." };
@@ -69,7 +95,15 @@ export async function closeStatementPeriod(
   let minCents: number | null = null;
   if (minRaw && String(minRaw).trim() !== "") {
     try {
-      minCents = parseMxnInput(String(minRaw)).amount;
+      const { data: acc } = await supabase
+        .from("accounts")
+        .select("currency")
+        .eq("id", accountId)
+        .maybeSingle();
+      minCents = parseMoneyInput(
+        String(minRaw),
+        asCurrency(acc?.currency),
+      ).amount;
     } catch {
       return { ok: false, error: "Pago mínimo inválido." };
     }

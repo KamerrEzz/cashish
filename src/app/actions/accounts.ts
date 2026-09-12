@@ -7,7 +7,7 @@ import {
   todayMexico,
 } from "@/lib/credit-cycle";
 import { suggestPayToAvoidInterest } from "@/lib/cashflow/engine";
-import { parseMxnInput, formatMxn, money } from "@/lib/money";
+import { parseMoneyInput, formatMoney, money, asCurrency } from "@/lib/money";
 import { requireProject, requireProjectWriter } from "@/lib/projects";
 
 const accountTypeSchema = z.enum([
@@ -16,6 +16,8 @@ const accountTypeSchema = z.enum([
   "savings",
   "credit_card",
 ]);
+
+const currencySchema = z.enum(["MXN", "COP", "PEN", "CLP"]);
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -36,6 +38,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
     .object({
       name: z.string().min(1).max(80),
       type: accountTypeSchema,
+      currency: currencySchema.default("MXN"),
       openingBalance: z.string().optional(),
       creditLimit: z.string().optional(),
       statementCloseDay: z.coerce.number().int().min(1).max(28).optional(),
@@ -45,6 +48,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
     .safeParse({
       name: formData.get("name"),
       type: formData.get("type"),
+      currency: formData.get("currency") || "MXN",
       openingBalance: formData.get("openingBalance") || undefined,
       creditLimit: formData.get("creditLimit") || undefined,
       statementCloseDay: formData.get("statementCloseDay") || undefined,
@@ -57,13 +61,17 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
   }
 
   const data = parsed.data;
+  const currency = data.currency;
   let openingCents = 0;
   try {
     if (data.openingBalance) {
-      openingCents = parseMxnInput(data.openingBalance).amount;
+      openingCents = parseMoneyInput(data.openingBalance, currency).amount;
     }
-  } catch {
-    return { ok: false, error: "Saldo inicial inválido." };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Saldo inicial inválido.",
+    };
   }
 
   if (data.type === "credit_card") {
@@ -80,12 +88,15 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
     let limitCents = 0;
     let minPay = 0;
     try {
-      limitCents = parseMxnInput(data.creditLimit).amount;
+      limitCents = parseMoneyInput(data.creditLimit, currency).amount;
       if (data.minimumPayment) {
-        minPay = parseMxnInput(data.minimumPayment).amount;
+        minPay = parseMoneyInput(data.minimumPayment, currency).amount;
       }
-    } catch {
-      return { ok: false, error: "Límite o pago mínimo inválido." };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Límite o pago mínimo inválido.",
+      };
     }
     if (limitCents <= 0) {
       return { ok: false, error: "El límite de crédito debe ser mayor a 0." };
@@ -101,6 +112,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
         project_id: project.id,
         name: data.name,
         type: "credit_card",
+        currency,
         balance_cents: openingCents,
       })
       .select("id")
@@ -154,6 +166,7 @@ export async function createAccount(formData: FormData): Promise<ActionResult> {
       project_id: project.id,
       name: data.name,
       type: data.type,
+      currency,
       balance_cents: openingCents,
     });
     if (error) {
@@ -206,27 +219,29 @@ export async function updateCreditCardProfile(
 
   let limitCents: number;
   let minPay = 0;
-  try {
-    limitCents = parseMxnInput(parsed.data.creditLimit).amount;
-    if (parsed.data.minimumPayment) {
-      minPay = parseMxnInput(parsed.data.minimumPayment).amount;
-    }
-  } catch {
-    return { ok: false, error: "Límite o mínimo inválido." };
-  }
-  if (limitCents <= 0) {
-    return { ok: false, error: "El límite debe ser mayor a 0." };
-  }
 
   const { data: account } = await supabase
     .from("accounts")
-    .select("id, type")
+    .select("id, type, currency")
     .eq("id", parsed.data.accountId)
     .eq("project_id", project.id)
     .maybeSingle();
 
   if (!account || account.type !== "credit_card") {
     return { ok: false, error: "Cuenta TDC no encontrada." };
+  }
+
+  const currency = asCurrency(account.currency);
+  try {
+    limitCents = parseMoneyInput(parsed.data.creditLimit, currency).amount;
+    if (parsed.data.minimumPayment) {
+      minPay = parseMoneyInput(parsed.data.minimumPayment, currency).amount;
+    }
+  } catch {
+    return { ok: false, error: "Límite o mínimo inválido." };
+  }
+  if (limitCents <= 0) {
+    return { ok: false, error: "El límite debe ser mayor a 0." };
   }
 
   const { error } = await supabase
@@ -323,6 +338,13 @@ export async function payCreditCardSmart(
   if (!card || card.type !== "credit_card" || !profile) {
     return { ok: false, error: "Tarjeta no encontrada." };
   }
+  if (asCurrency(fromAcc.currency) !== asCurrency(card.currency)) {
+    return {
+      ok: false,
+      error: "La liquidez y la TDC deben estar en la misma moneda.",
+    };
+  }
+  const currency = asCurrency(card.currency);
 
   const suggestion = suggestPayToAvoidInterest({
     closingBalanceCents: closed?.closing_balance_cents ?? null,
@@ -340,7 +362,7 @@ export async function payCreditCardSmart(
     amountCents = suggestion.avoidInterestCents;
   } else {
     try {
-      amountCents = parseMxnInput(parsed.data.amount ?? "").amount;
+      amountCents = parseMoneyInput(parsed.data.amount ?? "", currency).amount;
     } catch {
       return { ok: false, error: "Monto personalizado inválido." };
     }
@@ -352,7 +374,7 @@ export async function payCreditCardSmart(
   if (amountCents > fromAcc.balance_cents) {
     return {
       ok: false,
-      error: `No hay liquidez suficiente (tienes ${formatMxn(money(fromAcc.balance_cents))}).`,
+      error: `No hay liquidez suficiente (tienes ${formatMoney(money(fromAcc.balance_cents, currency))}).`,
     };
   }
 
@@ -369,7 +391,7 @@ export async function payCreditCardSmart(
       preview: true,
       amountCents,
       mode: parsed.data.mode,
-      message: `Vista previa (${modeLabel}): ${formatMxn(money(amountCents))}`,
+      message: `Vista previa (${modeLabel}): ${formatMoney(money(amountCents, currency))}`,
     };
   }
 
@@ -393,6 +415,6 @@ export async function payCreditCardSmart(
     ok: true,
     amountCents,
     mode: parsed.data.mode,
-    message: `Pago registrado (${modeLabel}): ${formatMxn(money(amountCents))}`,
+    message: `Pago registrado (${modeLabel}): ${formatMoney(money(amountCents, currency))}`,
   };
 }

@@ -1,8 +1,29 @@
-import { formatMxn, money } from "@/lib/money";
+import { asCurrency, formatMoney, money, type Currency } from "@/lib/money";
 import { ACCOUNT_TYPE_LABELS } from "@/lib/credit-cycle";
 
-export function Mxn({ cents, className }: { cents: number; className?: string }) {
-  return <span className={className}>{formatMxn(money(cents))}</span>;
+export function Mxn({
+  cents,
+  currency = "MXN",
+  className,
+}: {
+  cents: number;
+  currency?: Currency | string;
+  className?: string;
+}) {
+  return (
+    <span className={className}>
+      {formatMoney(money(cents, asCurrency(currency)))}
+    </span>
+  );
+}
+
+/** Alias — prefer when currency is explicit. */
+export function MoneyAmount(props: {
+  cents: number;
+  currency?: Currency | string;
+  className?: string;
+}) {
+  return <Mxn {...props} />;
 }
 
 export function accountTypeLabel(type: string) {

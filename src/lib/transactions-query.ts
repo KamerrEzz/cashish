@@ -1,4 +1,4 @@
-import { formatMxn, money } from "@/lib/money";
+import { asCurrency, currencyDecimals, formatMoney, money } from "@/lib/money";
 
 export const TX_PAGE_SIZE = 25;
 export const TX_EXPORT_MAX = 5000;
@@ -144,7 +144,10 @@ export function transactionsToCsv(rows: ExportRow[]): string {
         : row.transfer_id
           ? row.amount_cents
           : -row.amount_cents;
-    const monto = (signed / 100).toFixed(2);
+    const ccy = asCurrency(row.currency);
+    const decimals = currencyDecimals(ccy);
+    const factor = 10 ** decimals;
+    const monto = (signed / factor).toFixed(decimals);
     lines.push(
       [
         row.occurred_on,
@@ -162,8 +165,8 @@ export function transactionsToCsv(rows: ExportRow[]): string {
   return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
-export function formatAmountPlain(cents: number): string {
-  return formatMxn(money(cents));
+export function formatAmountPlain(cents: number, currency = "MXN"): string {
+  return formatMoney(money(cents, asCurrency(currency)));
 }
 
 export function buildExportFilename(from: string, to: string, today: string): string {

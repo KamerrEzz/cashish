@@ -6,7 +6,7 @@ import type { ActionResult } from "@/app/actions/accounts";
 import {
   buildInstallmentSchedule,
 } from "@/lib/cashflow/engine";
-import { parseMxnInput } from "@/lib/money";
+import { asCurrency, parseMoneyInput } from "@/lib/money";
 import { requireProjectWriter } from "@/lib/projects";
 
 export async function createPlannedInflow(
@@ -18,12 +18,14 @@ export async function createPlannedInflow(
     .object({
       label: z.string().trim().min(1).max(80),
       amount: z.string().min(1),
+      currency: z.enum(["MXN", "COP", "PEN", "CLP"]).default("MXN"),
       nextOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       frequency: z.enum(["weekly", "monthly", "yearly"]),
     })
     .safeParse({
       label: formData.get("label"),
       amount: formData.get("amount"),
+      currency: formData.get("currency") || "MXN",
       nextOn: formData.get("nextOn"),
       frequency: formData.get("frequency"),
     });
@@ -32,9 +34,10 @@ export async function createPlannedInflow(
     return { ok: false, error: "Datos de ingreso planeado inválidos." };
   }
 
+  const currency = asCurrency(parsed.data.currency);
   let amountCents: number;
   try {
-    amountCents = parseMxnInput(parsed.data.amount).amount;
+    amountCents = parseMoneyInput(parsed.data.amount, currency).amount;
   } catch {
     return { ok: false, error: "Monto inválido." };
   }
@@ -47,6 +50,7 @@ export async function createPlannedInflow(
     user_id: user.id,
     label: parsed.data.label,
     amount_cents: amountCents,
+    currency,
     next_on: parsed.data.nextOn,
     frequency: parsed.data.frequency,
   });
@@ -86,7 +90,15 @@ export async function createInstallmentPlan(
 
   let totalCents: number;
   try {
-    totalCents = parseMxnInput(parsed.data.total).amount;
+    const { data: acc } = await supabase
+      .from("accounts")
+      .select("currency")
+      .eq("id", parsed.data.accountId)
+      .maybeSingle();
+    totalCents = parseMoneyInput(
+      parsed.data.total,
+      asCurrency(acc?.currency),
+    ).amount;
   } catch {
     return { ok: false, error: "Monto total inválido." };
   }

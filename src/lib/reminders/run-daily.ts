@@ -1,7 +1,7 @@
 import { addDays, addMonths, addWeeks, addYears, format, parseISO } from "date-fns";
 import { Resend } from "resend";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { formatMxn, money } from "@/lib/money";
+import { asCurrency, formatMoney, money } from "@/lib/money";
 import { todayMexico } from "@/lib/credit-cycle";
 import { projectCashflow, suggestPayToAvoidInterest } from "@/lib/cashflow/engine";
 
@@ -156,7 +156,7 @@ export async function materializeAndSendReminders() {
           channel,
           title: `Tu quincena · Pago de tarjeta: ${account.name}`,
           body: withHubLink(
-            `Fecha límite ${period.due_on}. Saldo de referencia ${formatMxn(money(balance))}. Mínimo ${formatMxn(money(period.minimum_payment_cents))}.`,
+            `Fecha límite ${period.due_on}. Saldo de referencia ${formatMoney(money(balance))}. Mínimo ${formatMoney(money(period.minimum_payment_cents))}.`,
           ),
           due_on: period.due_on,
           related_account_id: period.account_id,
@@ -192,7 +192,7 @@ export async function materializeAndSendReminders() {
         event_type: "subscription_charge",
         channel,
         title: `Cobro de ${sub.name}`,
-        body: `${sub.name} (${sub.merchant}) se cobra el ${sub.next_billing_on} en ${accountName} por ${formatMxn(money(sub.amount_cents))}.`,
+        body: `${sub.name} (${sub.merchant}) se cobra el ${sub.next_billing_on} en ${accountName} por ${formatMoney(money(sub.amount_cents))}.`,
         due_on: sub.next_billing_on,
         related_account_id: sub.account_id,
         related_subscription_id: sub.id,
@@ -348,7 +348,7 @@ export async function materializeAndSendReminders() {
           channel,
           title: "Tu quincena · Posible faltante de liquidez",
           body: withHubLink(
-            `Tu proyección a ${CASHFLOW_HORIZON} días muestra faltante desde ${forecast.firstShortfallOn} (~${formatMxn(money(forecast.shortfallCents))}).`,
+            `Tu proyección a ${CASHFLOW_HORIZON} días muestra faltante desde ${forecast.firstShortfallOn} (~${formatMoney(money(forecast.shortfallCents))}).`,
           ),
           due_on: forecast.firstShortfallOn,
           dedupe_key: dedupeKey({

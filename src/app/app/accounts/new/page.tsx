@@ -26,7 +26,7 @@ export default function NewAccountPage() {
     <div>
       <PageHeader
         title="Nueva cuenta"
-        subtitle="Para TDC captura límite, día de corte y día de pago."
+        subtitle="Elige moneda (MXN, COP, PEN o CLP). Para TDC captura límite, corte y pago."
       />
       <Panel className="max-w-xl">
         <form action={action} className="space-y-4">
@@ -49,6 +49,14 @@ export default function NewAccountPage() {
               <option value="checking">Débito / cheques</option>
               <option value="savings">Ahorros</option>
               <option value="credit_card">Tarjeta de crédito</option>
+            </select>
+          </Field>
+          <Field label="Moneda">
+            <select name="currency" className={inputClass} defaultValue="MXN">
+              <option value="MXN">MXN — Peso mexicano</option>
+              <option value="COP">COP — Peso colombiano</option>
+              <option value="PEN">PEN — Sol peruano</option>
+              <option value="CLP">CLP — Peso chileno</option>
             </select>
           </Field>
           <Field

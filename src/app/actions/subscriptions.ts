@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { parseMxnInput } from "@/lib/money";
+import { asCurrency, parseMoneyInput } from "@/lib/money";
 import { merchantKey } from "@/lib/merchant";
 import { requireProject, requireProjectWriter } from "@/lib/projects";
 import type { ActionResult } from "@/app/actions/accounts";
@@ -36,11 +36,25 @@ export async function createSubscription(
     return { ok: false, error: "Datos de suscripción inválidos." };
   }
 
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("id, currency")
+    .eq("id", parsed.data.accountId)
+    .eq("project_id", project.id)
+    .maybeSingle();
+  if (!account) {
+    return { ok: false, error: "Cuenta no encontrada." };
+  }
+  const currency = asCurrency(account.currency);
+
   let amountCents: number;
   try {
-    amountCents = parseMxnInput(parsed.data.amount).amount;
-  } catch {
-    return { ok: false, error: "Monto inválido." };
+    amountCents = parseMoneyInput(parsed.data.amount, currency).amount;
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Monto inválido.",
+    };
   }
 
   const { error } = await supabase.from("subscriptions").insert({
@@ -50,6 +64,7 @@ export async function createSubscription(
     name: parsed.data.name,
     merchant: parsed.data.merchant,
     amount_cents: amountCents,
+    currency,
     frequency: parsed.data.frequency,
     next_billing_on: parsed.data.nextBillingOn,
     notes: parsed.data.notes ?? null,
@@ -95,7 +110,27 @@ export async function updateSubscription(
 
   let amountCents: number;
   try {
-    amountCents = parseMxnInput(parsed.data.amount).amount;
+    const accountId =
+      parsed.data.accountId ??
+      (
+        await supabase
+          .from("subscriptions")
+          .select("account_id, currency")
+          .eq("id", parsed.data.id)
+          .eq("project_id", project.id)
+          .maybeSingle()
+      ).data?.account_id;
+    const { data: acc } = accountId
+      ? await supabase
+          .from("accounts")
+          .select("currency")
+          .eq("id", accountId)
+          .maybeSingle()
+      : { data: null };
+    amountCents = parseMoneyInput(
+      parsed.data.amount,
+      asCurrency(acc?.currency),
+    ).amount;
   } catch {
     return { ok: false, error: "Monto inválido." };
   }

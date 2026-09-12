@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/actions/accounts";
-import { parseMxnInput } from "@/lib/money";
+import { parseMoneyInput, asCurrency } from "@/lib/money";
 import { requireProjectWriter } from "@/lib/projects";
 
 export async function createBudget(formData: FormData): Promise<ActionResult> {
@@ -14,20 +14,23 @@ export async function createBudget(formData: FormData): Promise<ActionResult> {
       name: z.string().trim().min(1).max(80),
       category: z.string().trim().max(80).optional(),
       monthlyLimit: z.string().min(1),
+      currency: z.enum(["MXN", "COP", "PEN", "CLP"]).default("MXN"),
     })
     .safeParse({
       name: formData.get("name"),
       category: formData.get("category") || undefined,
       monthlyLimit: formData.get("monthlyLimit"),
+      currency: formData.get("currency") || "MXN",
     });
 
   if (!parsed.success) {
     return { ok: false, error: "Datos de presupuesto inválidos." };
   }
 
+  const currency = asCurrency(parsed.data.currency);
   let limitCents: number;
   try {
-    limitCents = parseMxnInput(parsed.data.monthlyLimit).amount;
+    limitCents = parseMoneyInput(parsed.data.monthlyLimit, currency).amount;
   } catch {
     return { ok: false, error: "Límite mensual inválido." };
   }
@@ -41,6 +44,7 @@ export async function createBudget(formData: FormData): Promise<ActionResult> {
     name: parsed.data.name,
     category: parsed.data.category?.trim() || null,
     monthly_limit_cents: limitCents,
+    currency,
   });
 
   if (error) {

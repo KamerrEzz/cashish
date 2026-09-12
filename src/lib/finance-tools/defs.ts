@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatMxn, money, parseMxnInput } from "@/lib/money";
+import { asCurrency, formatMoney, money, parseMoneyInput, type Currency } from "@/lib/money";
 import {
   availableCreditCents,
   buildInitialStatementWindow,
@@ -16,15 +16,21 @@ import { buildQuincenaPlanActions } from "@/lib/quincena-plan";
 import type { Database } from "@/lib/database.types";
 import type { Admin, CashishToolDef } from "./types";
 
-function parseAmount(raw: string) {
-  const cents = parseMxnInput(raw).amount;
+function parseAmount(raw: string, currency: Currency | string = "MXN") {
+  const cents = parseMoneyInput(raw, asCurrency(currency)).amount;
   if (cents <= 0) throw new Error("El monto debe ser mayor a 0");
   return cents;
 }
 
-const mxnAmount = z
+function fmt(cents: number, currency: Currency | string = "MXN") {
+  return formatMoney(money(cents, asCurrency(currency)));
+}
+
+const moneyAmount = z
   .string()
-  .describe('Monto en MXN con hasta 2 decimales, ej. "229.50"');
+  .describe('Monto decimal segun la moneda de la cuenta. MXN/COP/PEN: hasta 2 decimales. CLP: enteros. Ej. "229.50"');
+
+const currencyCode = z.enum(["MXN", "COP", "PEN", "CLP"]).default("MXN");
 
 const isoDate = z
   .string()
@@ -103,7 +109,7 @@ export function buildCashishTools(): CashishToolDef[] {
             id: a.id,
             name: a.name,
             type: a.type,
-            balance: formatMxn(money(a.balance_cents)),
+            balance: fmt(a.balance_cents),
             balance_cents: a.balance_cents,
           })),
         credit_cards: (accounts ?? [])
@@ -117,13 +123,13 @@ export function buildCashishTools(): CashishToolDef[] {
             return {
               id: a.id,
               name: a.name,
-              owed: formatMxn(money(a.balance_cents)),
+              owed: fmt(a.balance_cents),
               owed_cents: a.balance_cents,
               available:
-                available != null ? formatMxn(money(available)) : null,
+                available != null ? fmt(available) : null,
               available_cents: available,
               limit: profile
-                ? formatMxn(money(profile.credit_limit_cents))
+                ? fmt(profile.credit_limit_cents)
                 : null,
               statement_closes_on: period?.closes_on ?? null,
               payment_due_on: period?.due_on ?? null,
@@ -134,7 +140,7 @@ export function buildCashishTools(): CashishToolDef[] {
           id: s.id,
           name: s.name,
           merchant: s.merchant,
-          amount: formatMxn(money(s.amount_cents)),
+          amount: fmt(s.amount_cents),
           amount_cents: s.amount_cents,
           next_billing_on: s.next_billing_on,
           account:
@@ -321,7 +327,7 @@ export function buildCashishTools(): CashishToolDef[] {
           credit_card_profile: profile,
           available_cents: available,
           available:
-            available != null ? formatMxn(money(available)) : null,
+            available != null ? fmt(available) : null,
           open_statement: openPeriod,
           recent_statement_periods: periods,
           recent_transactions: txs,
@@ -340,6 +346,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .object({
           name: z.string().min(1).max(80),
           type: accountType,
+          currency: currencyCode,
           opening_balance: z.string().default("0").describe("Saldo inicial o deuda inicial TDC"),
           credit_limit: z.string().optional(),
           statement_close_day: z.number().int().min(1).max(28).optional(),
@@ -352,9 +359,10 @@ export function buildCashishTools(): CashishToolDef[] {
       const input = args as Record<string, any>;
 
       const supabase = ctx.db();
+      const currency = asCurrency(input.currency ?? "MXN");
       let openingCents = 0;
       try {
-        openingCents = parseMxnInput(input.opening_balance).amount;
+        openingCents = parseMoneyInput(input.opening_balance, currency).amount;
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Saldo inválido");
       }
@@ -372,9 +380,9 @@ export function buildCashishTools(): CashishToolDef[] {
         let limitCents = 0;
         let minPay = 0;
         try {
-          limitCents = parseAmount(input.credit_limit);
+          limitCents = parseAmount(input.credit_limit, currency);
           if (input.minimum_payment) {
-            minPay = parseMxnInput(input.minimum_payment).amount;
+            minPay = parseMoneyInput(input.minimum_payment, currency).amount;
           }
         } catch (e) {
           throw new Error(e instanceof Error ? e.message : "Límite inválido");
@@ -388,6 +396,7 @@ export function buildCashishTools(): CashishToolDef[] {
             project_id: ctx.projectId,
             name: input.name,
             type: "credit_card",
+            currency,
             balance_cents: openingCents,
           })
           .select("*")
@@ -441,6 +450,7 @@ export function buildCashishTools(): CashishToolDef[] {
             project_id: ctx.projectId,
           name: input.name,
           type: input.type,
+          currency,
           balance_cents: openingCents,
         })
         .select("*")
@@ -518,7 +528,7 @@ export function buildCashishTools(): CashishToolDef[] {
           patch.credit_limit_cents = parseAmount(input.credit_limit);
         }
         if (input.minimum_payment != null) {
-          patch.minimum_payment_cents = parseMxnInput(input.minimum_payment).amount;
+          patch.minimum_payment_cents = parseMoneyInput(input.minimum_payment, "MXN").amount;
         }
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Monto inválido");
@@ -638,7 +648,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .object({
           account_id: z.string().uuid(),
           type: z.enum(["expense", "income"]),
-          amount: mxnAmount,
+          amount: moneyAmount,
           merchant: z.string().optional(),
           description: z.string().optional(),
           category: z.string().optional(),
@@ -717,7 +727,7 @@ export function buildCashishTools(): CashishToolDef[] {
         return {
           transaction: tx,
           new_balance_cents: nextBalance,
-          new_balance: formatMxn(money(nextBalance)),
+          new_balance: fmt(nextBalance),
         };
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Error");
@@ -754,7 +764,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .object({
           from_account_id: z.string().uuid(),
           to_account_id: z.string().uuid(),
-          amount: mxnAmount,
+          amount: moneyAmount,
           note: z.string().optional(),
           occurred_on: isoDate.optional(),
         })
@@ -877,7 +887,7 @@ export function buildCashishTools(): CashishToolDef[] {
         .object({
           from_account_id: z.string().uuid(),
           credit_card_account_id: z.string().uuid(),
-          amount: mxnAmount,
+          amount: moneyAmount,
           note: z.string().optional(),
           occurred_on: isoDate.optional(),
         })
@@ -978,7 +988,7 @@ export function buildCashishTools(): CashishToolDef[] {
           transfer,
           from_balance_cents: fromNext,
           card_owed_cents: cardNext,
-          card_owed: formatMxn(money(cardNext)),
+          card_owed: fmt(cardNext),
         };
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Error");
@@ -1050,8 +1060,8 @@ export function buildCashishTools(): CashishToolDef[] {
         transactions: txs,
         charge_total_cents: chargeTotal,
         payment_total_cents: paymentTotal,
-        charge_total: formatMxn(money(chargeTotal)),
-        payment_total: formatMxn(money(paymentTotal)),
+        charge_total: fmt(chargeTotal),
+        payment_total: fmt(paymentTotal),
       };
     },
   },
@@ -1096,7 +1106,7 @@ export function buildCashishTools(): CashishToolDef[] {
         let minPay = profile.minimum_payment_cents;
         if (minimum_payment != null && minimum_payment.trim() !== "") {
           try {
-            minPay = parseMxnInput(minimum_payment).amount;
+            minPay = parseMoneyInput(minimum_payment, "MXN").amount;
           } catch (e) {
             throw new Error(e instanceof Error ? e.message : "Pago mínimo inválido");
           }
@@ -1141,7 +1151,7 @@ export function buildCashishTools(): CashishToolDef[] {
         return {
           closed_statement: closed,
           new_open_statement: opened,
-          closing_balance: formatMxn(money(account.balance_cents)),
+          closing_balance: fmt(account.balance_cents),
         };
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Error");
@@ -1226,7 +1236,7 @@ export function buildCashishTools(): CashishToolDef[] {
           account_id: z.string().uuid(),
           name: z.string().min(1).max(80),
           merchant: z.string().min(1).max(80),
-          amount: mxnAmount,
+          amount: moneyAmount,
           frequency: z.enum(["weekly", "monthly", "yearly"]).default("monthly"),
           next_billing_on: isoDate,
           notes: z.string().optional(),
@@ -1277,7 +1287,7 @@ export function buildCashishTools(): CashishToolDef[] {
           account_id: z.string().uuid().optional(),
           name: z.string().min(1).max(80).optional(),
           merchant: z.string().min(1).max(80).optional(),
-          amount: mxnAmount.optional(),
+          amount: moneyAmount.optional(),
           frequency: z.enum(["weekly", "monthly", "yearly"]).optional(),
           next_billing_on: isoDate.optional(),
           notes: z.string().nullable().optional(),
@@ -1563,14 +1573,14 @@ export function buildCashishTools(): CashishToolDef[] {
 
       return {
         ...forecast,
-        starting_liquid: formatMxn(money(forecast.startingLiquidCents)),
-        ending_liquid: formatMxn(money(forecast.endingLiquidCents)),
-        shortfall: formatMxn(money(forecast.shortfallCents)),
+        starting_liquid: fmt(forecast.startingLiquidCents),
+        ending_liquid: fmt(forecast.endingLiquidCents),
+        shortfall: fmt(forecast.shortfallCents),
         events: forecast.events.slice(0, 40).map((e) => ({
           date: e.date,
           kind: e.kind,
           label: e.label,
-          amount: formatMxn(money(e.amountCents)),
+          amount: fmt(e.amountCents),
           amount_cents: e.amountCents,
         })),
       };
@@ -1624,7 +1634,7 @@ export function buildCashishTools(): CashishToolDef[] {
           merchant: acc.merchantSample,
           count: acc.amounts.length,
           avg_cents: Math.round(avg),
-          avg: formatMxn(money(Math.round(avg))),
+          avg: fmt(Math.round(avg)),
           last_occurred_on: acc.dates[acc.dates.length - 1],
           already_tracked: tracked.has(key),
         });
@@ -1677,8 +1687,8 @@ export function buildCashishTools(): CashishToolDef[] {
       return {
         installments: (data ?? []).map((i) => ({
           ...i,
-          installment: formatMxn(money(i.installment_cents)),
-          total: formatMxn(money(i.total_cents)),
+          installment: fmt(i.installment_cents),
+          total: fmt(i.total_cents),
         })),
       };
     },
@@ -1735,7 +1745,7 @@ export function buildCashishTools(): CashishToolDef[] {
       const preview = {
         mode,
         amount_cents: amountCents,
-        amount: formatMxn(money(amountCents)),
+        amount: fmt(amountCents),
         minimum_cents: suggestion.minimumCents,
         avoid_interest_cents: suggestion.avoidInterestCents,
         confirm: Boolean(input.confirm),
@@ -1826,9 +1836,9 @@ export function buildCashishTools(): CashishToolDef[] {
             name: b.name,
             category: b.category,
             monthly_limit_cents: b.monthly_limit_cents,
-            monthly_limit: formatMxn(money(b.monthly_limit_cents)),
+            monthly_limit: fmt(b.monthly_limit_cents),
             spent_cents: spent,
-            spent: formatMxn(money(spent)),
+            spent: fmt(spent),
             remaining_cents: b.monthly_limit_cents - spent,
           };
         }),
@@ -1947,11 +1957,11 @@ export function buildCashishTools(): CashishToolDef[] {
         ...plan,
         forecast: {
           status: snapshot.forecast.status,
-          starting_liquid: formatMxn(money(snapshot.forecast.startingLiquidCents)),
-          ending_liquid: formatMxn(money(snapshot.forecast.endingLiquidCents)),
-          min_balance: formatMxn(money(snapshot.forecast.minBalanceCents)),
+          starting_liquid: fmt(snapshot.forecast.startingLiquidCents),
+          ending_liquid: fmt(snapshot.forecast.endingLiquidCents),
+          min_balance: fmt(snapshot.forecast.minBalanceCents),
           first_shortfall_on: snapshot.forecast.firstShortfallOn,
-          shortfall: formatMxn(money(snapshot.forecast.shortfallCents)),
+          shortfall: fmt(snapshot.forecast.shortfallCents),
         },
       };
     },

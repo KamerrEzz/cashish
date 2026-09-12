@@ -3,6 +3,11 @@ import { requireProject } from "@/lib/projects";
 import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
 import { todayLabelMx, daysBetween, relativeDayLabel } from "@/lib/dates";
 import {
+  asCurrency,
+  CURRENCIES,
+  type Currency,
+} from "@/lib/money";
+import {
   Mxn,
   Panel,
   accountTypeLabel,
@@ -86,22 +91,54 @@ export default async function DashboardPage() {
   const liquid = (accounts ?? []).filter((a) => a.type !== "credit_card");
   const cards = (accounts ?? []).filter((a) => a.type === "credit_card");
 
-  const liquidTotal = liquid.reduce((s, a) => s + a.balance_cents, 0);
-  const debtTotal = cards.reduce((s, a) => s + a.balance_cents, 0);
-  const minDueTotal = cards.reduce((s, a) => {
-    const period = periodByAccount.get(a.id);
-    const profile = profileByAccount.get(a.id);
-    return s + (period?.minimum_payment_cents || profile?.minimum_payment_cents || 0);
-  }, 0);
+  const currenciesInUse = CURRENCIES.filter((c) =>
+    (accounts ?? []).some((a) => asCurrency(a.currency) === c),
+  );
+  const summaryCurrency: Currency = currenciesInUse[0] ?? "MXN";
 
+  function totalsFor(currency: Currency) {
+    const liq = liquid.filter((a) => asCurrency(a.currency) === currency);
+    const cds = cards.filter((a) => asCurrency(a.currency) === currency);
+    const liquidTotal = liq.reduce((s, a) => s + a.balance_cents, 0);
+    const debtTotal = cds.reduce((s, a) => s + a.balance_cents, 0);
+    const minDueTotal = cds.reduce((s, a) => {
+      const period = periodByAccount.get(a.id);
+      const profile = profileByAccount.get(a.id);
+      return (
+        s +
+        (period?.minimum_payment_cents || profile?.minimum_payment_cents || 0)
+      );
+    }, 0);
+    const subMonthly = (subscriptions ?? [])
+      .filter((sub) => asCurrency(sub.currency) === currency)
+      .reduce((s, sub) => {
+        if (sub.frequency === "yearly") return s + Math.round(sub.amount_cents / 12);
+        if (sub.frequency === "weekly") return s + Math.round(sub.amount_cents * 4.33);
+        return s + sub.amount_cents;
+      }, 0);
+    const coverageOk = minDueTotal === 0 ? true : liquidTotal >= minDueTotal;
+    return {
+      liquidTotal,
+      debtTotal,
+      minDueTotal,
+      subMonthly,
+      netWorth: liquidTotal - debtTotal,
+      coverageOk,
+      liquidCount: liq.length,
+      cardCount: cds.length,
+    };
+  }
+
+  const primary = totalsFor(summaryCurrency);
+  const liquidTotal = primary.liquidTotal;
+  const debtTotal = primary.debtTotal;
+  const minDueTotal = primary.minDueTotal;
   const coverageOk =
-    minDueTotal === 0 ? true : liquidTotal >= minDueTotal;
-  const netWorth = liquidTotal - debtTotal;
-  const subMonthly = (subscriptions ?? []).reduce((s, sub) => {
-    if (sub.frequency === "yearly") return s + Math.round(sub.amount_cents / 12);
-    if (sub.frequency === "weekly") return s + Math.round(sub.amount_cents * 4.33);
-    return s + sub.amount_cents;
-  }, 0);
+    currenciesInUse.length <= 1
+      ? primary.coverageOk
+      : currenciesInUse.every((c) => totalsFor(c).coverageOk);
+  const netWorth = primary.netWorth;
+  const subMonthly = primary.subMonthly;
 
   const agenda: AgendaItem[] = [];
   for (const a of cards) {
@@ -125,6 +162,7 @@ export default async function DashboardPage() {
         profileByAccount.get(a.id)?.minimum_payment_cents ||
         undefined,
       amountLabel: "pago mínimo",
+      currency: asCurrency(a.currency),
     });
   }
   agenda.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
@@ -224,21 +262,38 @@ export default async function DashboardPage() {
 
       <SummaryStrip>
         <SummaryCell>
-          <StatCell label="Patrimonio neto" hint="Liquidez − deuda TDC">
+          <StatCell
+            label={
+              currenciesInUse.length > 1
+                ? `Patrimonio neto (${summaryCurrency})`
+                : "Patrimonio neto"
+            }
+            hint={
+              currenciesInUse.length > 1
+                ? "Por moneda — no se mezclan saldos"
+                : "Liquidez − deuda TDC"
+            }
+          >
             <span className={netWorth < 0 ? "text-[var(--danger-ink)]" : undefined}>
               {netWorth < 0 ? "−" : null}
-              <Mxn cents={Math.abs(netWorth)} />
+              <Mxn cents={Math.abs(netWorth)} currency={summaryCurrency} />
             </span>
           </StatCell>
         </SummaryCell>
         <SummaryCell>
-          <StatCell label="Liquidez" hint={`${liquid.length} cuenta${liquid.length === 1 ? "" : "s"}`}>
-            <Mxn cents={liquidTotal} />
+          <StatCell
+            label="Liquidez"
+            hint={`${primary.liquidCount} cuenta${primary.liquidCount === 1 ? "" : "s"}`}
+          >
+            <Mxn cents={liquidTotal} currency={summaryCurrency} />
           </StatCell>
         </SummaryCell>
         <SummaryCell>
-          <StatCell label="Deuda TDC" hint={`${cards.length} tarjeta${cards.length === 1 ? "" : "s"}`}>
-            <Mxn cents={debtTotal} />
+          <StatCell
+            label="Deuda TDC"
+            hint={`${primary.cardCount} tarjeta${primary.cardCount === 1 ? "" : "s"}`}
+          >
+            <Mxn cents={debtTotal} currency={summaryCurrency} />
           </StatCell>
         </SummaryCell>
         <SummaryCell>
@@ -254,16 +309,46 @@ export default async function DashboardPage() {
           >
             <span
               className={
-                minDueTotal > 0 && !coverageOk
+                minDueTotal > 0 && !primary.coverageOk
                   ? "text-[var(--warn-ink)]"
                   : undefined
               }
             >
-              <Mxn cents={minDueTotal > 0 ? minDueTotal : subMonthly} />
+              <Mxn
+                cents={minDueTotal > 0 ? minDueTotal : subMonthly}
+                currency={summaryCurrency}
+              />
             </span>
           </StatCell>
         </SummaryCell>
       </SummaryStrip>
+      {currenciesInUse.length > 1 ? (
+        <Panel>
+          <h2 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
+            Por moneda
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Los totales no se convierten entre sí (sin tipo de cambio).
+          </p>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+            {currenciesInUse.map((c) => {
+              const t = totalsFor(c);
+              return (
+                <li
+                  key={c}
+                  className="rounded-[var(--radius)] border border-[var(--line)] p-3"
+                >
+                  <p className="text-xs font-medium text-[var(--muted)]">{c}</p>
+                  <p className="mt-1 text-sm text-[var(--ink)]">
+                    Liquidez <Mxn cents={t.liquidTotal} currency={c} /> · Deuda{" "}
+                    <Mxn cents={t.debtTotal} currency={c} />
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      ) : null}
 
       <Panel>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -347,11 +432,12 @@ export default async function DashboardPage() {
                       {a.name}
                     </Link>
                     <p className="text-xs text-[var(--muted)]">
-                      {accountTypeLabel(a.type)}
+                      {accountTypeLabel(a.type)} · {asCurrency(a.currency)}
                     </p>
                   </div>
                   <Mxn
                     cents={a.balance_cents}
+                    currency={a.currency}
                     className="shrink-0 tabular-nums font-medium"
                   />
                 </li>
@@ -360,8 +446,14 @@ export default async function DashboardPage() {
           </ul>
           {liquid.length > 0 ? (
             <div className="mt-2 flex justify-between gap-3 border-t border-[var(--line)] pt-3 text-sm">
-              <span className="text-[var(--muted)]">Total</span>
-              <Mxn cents={liquidTotal} className="shrink-0 font-semibold tabular-nums" />
+              <span className="text-[var(--muted)]">
+                Total{currenciesInUse.length > 1 ? ` (${summaryCurrency})` : ""}
+              </span>
+              <Mxn
+                cents={liquidTotal}
+                currency={summaryCurrency}
+                className="shrink-0 font-semibold tabular-nums"
+              />
             </div>
           ) : null}
         </Panel>
@@ -457,7 +549,7 @@ export default async function DashboardPage() {
                       <div className="shrink-0 text-right">
                         <p className="text-xs text-[var(--muted)]">Debes</p>
                         <p className="font-[family-name:var(--font-display)] text-lg tabular-nums tracking-tight sm:text-xl">
-                          <Mxn cents={a.balance_cents} />
+                          <Mxn cents={a.balance_cents} currency={a.currency} />
                         </p>
                       </div>
                     </div>
@@ -479,13 +571,16 @@ export default async function DashboardPage() {
                               : "text-[var(--ink)]"
                           }`}
                         >
-                          <Mxn cents={available} />
+                          <Mxn cents={available} currency={a.currency} />
                         </dd>
                       </div>
                       <div className="min-w-0">
                         <dt className="text-[var(--muted)]">Límite</dt>
                         <dd className="mt-0.5 break-words tabular-nums font-medium text-[var(--ink)]">
-                          <Mxn cents={cc?.credit_limit_cents ?? 0} />
+                          <Mxn
+                            cents={cc?.credit_limit_cents ?? 0}
+                            currency={a.currency}
+                          />
                         </dd>
                       </div>
                       <div className="min-w-0">
@@ -565,6 +660,7 @@ export default async function DashboardPage() {
                   </div>
                   <Mxn
                     cents={s.amount_cents}
+                    currency={s.currency}
                     className="shrink-0 tabular-nums font-medium"
                   />
                 </li>

@@ -127,6 +127,7 @@ export type AgendaItem = {
   date: string;
   amountCents?: number;
   amountLabel?: string;
+  currency?: string;
 };
 
 export function CreditAgenda({
@@ -188,6 +189,7 @@ export function CreditAgenda({
                   <div className="shrink-0 sm:text-right">
                     <Mxn
                       cents={item.amountCents}
+                      currency={item.currency}
                       className="font-medium tabular-nums text-[var(--ink)]"
                     />
                     {item.amountLabel ? (

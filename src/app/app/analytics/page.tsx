@@ -1,6 +1,7 @@
 import { requireProject } from "@/lib/projects";
 import { availableCreditCents, todayMexico } from "@/lib/credit-cycle";
 import { daysBetween, formatDateMx } from "@/lib/dates";
+import { asCurrency, CURRENCIES, type Currency } from "@/lib/money";
 import { Mxn, PageHeader, Panel } from "@/components/ui";
 import { EmptyState, SectionTitle } from "@/components/empty-state";
 import {
@@ -96,25 +97,25 @@ export default async function AnalyticsPage() {
       .eq("is_active", true),
     supabase
       .from("transactions")
-      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
+      .select("type, amount_cents, currency, occurred_on, merchant, category, transfer_id")
       .eq("project_id", project.id)
       .gte("occurred_on", monthStart)
       .lte("occurred_on", monthEnd),
     supabase
       .from("transactions")
-      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
+      .select("type, amount_cents, currency, occurred_on, merchant, category, transfer_id")
       .eq("project_id", project.id)
       .gte("occurred_on", prev.start)
       .lte("occurred_on", prev.end),
     supabase
       .from("transactions")
-      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
+      .select("type, amount_cents, currency, occurred_on, merchant, category, transfer_id")
       .eq("project_id", project.id)
       .gte("occurred_on", since30)
       .lte("occurred_on", today),
     supabase
       .from("transactions")
-      .select("type, amount_cents, occurred_on, merchant, category, transfer_id")
+      .select("type, amount_cents, currency, occurred_on, merchant, category, transfer_id")
       .eq("project_id", project.id)
       .gte("occurred_on", since90)
       .lte("occurred_on", today),
@@ -143,7 +144,7 @@ export default async function AnalyticsPage() {
     ownedProjectIds.length > 0
       ? await supabase
           .from("accounts")
-          .select("project_id, type, balance_cents, is_archived")
+          .select("project_id, type, balance_cents, currency, is_archived")
           .in(
             "project_id",
             ownedProjectIds.map((p) => p.id),
@@ -154,18 +155,29 @@ export default async function AnalyticsPage() {
             project_id: string;
             type: string;
             balance_cents: number;
+            currency: string;
           }>,
         };
+
+  const currenciesInUse = CURRENCIES.filter((c) =>
+    (accounts ?? []).some((a) => asCurrency(a.currency) === c),
+  );
+  const reportCurrency: Currency = currenciesInUse[0] ?? "MXN";
 
   let ownerLiquid = 0;
   let ownerDebt = 0;
   for (const a of ownedAccounts ?? []) {
+    if (asCurrency(a.currency) !== reportCurrency) continue;
     if (a.type === "credit_card") ownerDebt += a.balance_cents;
     else ownerLiquid += a.balance_cents;
   }
 
-  const liquid = (accounts ?? []).filter((a) => a.type !== "credit_card");
-  const cards = (accounts ?? []).filter((a) => a.type === "credit_card");
+  const liquid = (accounts ?? []).filter(
+    (a) => a.type !== "credit_card" && asCurrency(a.currency) === reportCurrency,
+  );
+  const cards = (accounts ?? []).filter(
+    (a) => a.type === "credit_card" && asCurrency(a.currency) === reportCurrency,
+  );
   const profileByAccount = new Map(
     (profiles ?? []).map((p) => [p.account_id, p]),
   );
@@ -187,7 +199,9 @@ export default async function AnalyticsPage() {
       : s;
   }, 0);
 
-  const subMonthly = (subscriptions ?? []).reduce((s, sub) => {
+  const subMonthly = (subscriptions ?? [])
+    .filter((sub) => asCurrency(sub.currency) === reportCurrency)
+    .reduce((s, sub) => {
     if (sub.frequency === "yearly") return s + Math.round(sub.amount_cents / 12);
     if (sub.frequency === "weekly")
       return s + Math.round(sub.amount_cents * 4.33);
@@ -203,29 +217,37 @@ export default async function AnalyticsPage() {
     );
   }, 0);
 
-  const incomeMonth = (txsMonth ?? [])
+  const inReportCcy = <T extends { currency: string }>(rows: T[] | null) =>
+    (rows ?? []).filter((t) => asCurrency(t.currency) === reportCurrency);
+
+  const txsMonthCcy = inReportCcy(txsMonth);
+  const txsPrevCcy = inReportCcy(txsPrevMonth);
+  const txs30Ccy = inReportCcy(txs30);
+  const txs90Ccy = inReportCcy(txs90);
+
+  const incomeMonth = txsMonthCcy
     .filter((t) => t.type === "income" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
-  const expenseMonth = (txsMonth ?? [])
+  const expenseMonth = txsMonthCcy
     .filter((t) => t.type === "expense" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
-  const incomePrev = (txsPrevMonth ?? [])
+  const incomePrev = txsPrevCcy
     .filter((t) => t.type === "income" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
-  const expensePrev = (txsPrevMonth ?? [])
+  const expensePrev = txsPrevCcy
     .filter((t) => t.type === "expense" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
-  const income30 = (txs30 ?? [])
+  const income30 = txs30Ccy
     .filter((t) => t.type === "income" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
-  const expense30 = (txs30 ?? [])
+  const expense30 = txs30Ccy
     .filter((t) => t.type === "expense" && !t.transfer_id)
     .reduce((s, t) => s + t.amount_cents, 0);
 
   const expenseCompare = monthCompare(expenseMonth, expensePrev);
-  const daily90 = buildDailyFlow(txs90 ?? [], since90, today);
-  const categories = buildCategoryBreakdown(txs30 ?? []);
-  const merchants = buildMerchantBars(txs30 ?? [], 8);
+  const daily90 = buildDailyFlow(txs90Ccy, since90, today);
+  const categories = buildCategoryBreakdown(txs30Ccy);
+  const merchants = buildMerchantBars(txs30Ccy, 8);
 
   const utilizationPct =
     limitTotal > 0 ? Math.round((debtTotal / limitTotal) * 100) : 0;
@@ -318,19 +340,22 @@ export default async function AnalyticsPage() {
     <div className="dash-enter space-y-6 sm:space-y-8">
       <PageHeader
         title="Analíticas"
-        subtitle={`Detalle de ${monthLabel}: flujo, categorías, crédito y ritmo vs el mes anterior.`}
+        subtitle={`Detalle de ${monthLabel} (${reportCurrency}): flujo, categorías y ritmo vs el mes anterior.`}
       />
 
       <SummaryStrip>
         <SummaryCell>
-          <StatCell label="Patrimonio neto" hint="Liquidez − deuda TDC">
+          <StatCell
+            label={`Patrimonio neto (${reportCurrency})`}
+            hint="Liquidez − deuda TDC"
+          >
             <span
               className={
                 netWorth < 0 ? "text-[var(--danger-ink)]" : "text-[var(--ink)]"
               }
             >
               {netWorth < 0 ? "−" : ""}
-              <Mxn cents={absNet} />
+              <Mxn cents={absNet} currency={reportCurrency} />
             </span>
           </StatCell>
         </SummaryCell>
@@ -344,7 +369,10 @@ export default async function AnalyticsPage() {
               }
             >
               {incomeMonth - expenseMonth < 0 ? "−" : "+"}
-              <Mxn cents={Math.abs(incomeMonth - expenseMonth)} />
+              <Mxn
+                cents={Math.abs(incomeMonth - expenseMonth)}
+                currency={reportCurrency}
+              />
             </span>
           </StatCell>
         </SummaryCell>

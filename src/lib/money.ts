@@ -1,5 +1,51 @@
 export type Cents = number;
-export type Currency = "MXN";
+
+/** Supported ledger currencies (LATAM). Amounts are integer minor units. */
+export const CURRENCIES = ["MXN", "COP", "PEN", "CLP"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+
+export const CURRENCY_META: Record<
+  Currency,
+  { label: string; short: string; locale: string; decimals: number }
+> = {
+  MXN: {
+    label: "Peso mexicano (MXN)",
+    short: "MXN",
+    locale: "es-MX",
+    decimals: 2,
+  },
+  COP: {
+    label: "Peso colombiano (COP)",
+    short: "COP",
+    locale: "es-CO",
+    decimals: 2,
+  },
+  PEN: {
+    label: "Sol peruano (PEN)",
+    short: "PEN",
+    locale: "es-PE",
+    decimals: 2,
+  },
+  CLP: {
+    label: "Peso chileno (CLP)",
+    short: "CLP",
+    locale: "es-CL",
+    decimals: 0,
+  },
+};
+
+export function isCurrency(value: string): value is Currency {
+  return (CURRENCIES as readonly string[]).includes(value);
+}
+
+export function asCurrency(value: string | null | undefined): Currency {
+  if (value && isCurrency(value)) return value;
+  return "MXN";
+}
+
+export function currencyDecimals(currency: Currency): number {
+  return CURRENCY_META[currency].decimals;
+}
 
 export interface Money {
   amount: Cents;
@@ -84,26 +130,84 @@ export function splitByPct(m: Money, pcts: number[]): Money[] {
   );
 }
 
-/** Parse user decimal input like "229.50" → Money. Rejects non-finite / too many decimals. */
-export function parseMxnInput(raw: string): Money {
+/**
+ * Parse user decimal input into minor units for the given currency.
+ * CLP has 0 decimals (whole pesos); MXN/COP/PEN use 2.
+ */
+export function parseMoneyInput(raw: string, currency: Currency): Money {
   const trimmed = raw.trim().replace(/,/g, "");
-  if (!/^-?\d+(\.\d{1,2})?$/.test(trimmed)) {
-    throw new Error("Monto inválido. Usa hasta 2 decimales.");
+  const decimals = currencyDecimals(currency);
+
+  if (decimals === 0) {
+    if (!/^-?\d+$/.test(trimmed)) {
+      throw new Error("Monto inválido. Para CLP usa enteros sin decimales.");
+    }
+    const units = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(units)) {
+      throw new Error("Monto inválido.");
+    }
+    return money(units, currency);
+  }
+
+  if (!new RegExp(`^-?\\d+(\\.\\d{1,${decimals}})?$`).test(trimmed)) {
+    throw new Error(`Monto inválido. Usa hasta ${decimals} decimales.`);
   }
   const negative = trimmed.startsWith("-");
   const [whole, frac = ""] = trimmed.replace("-", "").split(".");
-  const cents =
-    Number.parseInt(whole, 10) * 100 +
-    Number.parseInt((frac + "00").slice(0, 2), 10);
-  return money(negative ? -cents : cents, "MXN");
+  const factor = 10 ** decimals;
+  const pad = "0".repeat(decimals);
+  const minor =
+    Number.parseInt(whole, 10) * factor +
+    Number.parseInt((frac + pad).slice(0, decimals), 10);
+  return money(negative ? -minor : minor, currency);
 }
 
-export function formatMxn(m: Money, locale = "es-MX"): string {
+/** @deprecated Prefer parseMoneyInput(raw, currency). MXN wrapper. */
+export function parseMxnInput(raw: string): Money {
+  return parseMoneyInput(raw, "MXN");
+}
+
+export function formatMoney(m: Money): string {
+  const meta = CURRENCY_META[m.currency];
+  const factor = 10 ** meta.decimals;
+  return new Intl.NumberFormat(meta.locale, {
+    style: "currency",
+    currency: m.currency,
+    minimumFractionDigits: meta.decimals,
+    maximumFractionDigits: meta.decimals,
+  }).format(m.amount / factor);
+}
+
+/** @deprecated Prefer formatMoney. MXN-only wrapper. */
+export function formatMxn(m: Money, _locale = "es-MX"): string {
   if (m.currency !== "MXN") {
     throw new Error(`formatMxn only supports MXN, got ${m.currency}`);
   }
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "MXN",
-  }).format(m.amount / 100);
+  return formatMoney(m);
+}
+
+/** Sum minor amounts that already share a currency (caller groups first). */
+export function sumMinor(amounts: number[], currency: Currency): Money {
+  let total = 0;
+  for (const a of amounts) {
+    if (!Number.isInteger(a)) {
+      throw new Error(`Amount must be an integer number of cents, got ${a}`);
+    }
+    total += a;
+  }
+  return money(total, currency);
+}
+
+/** Group rows by currency and sum — never mixes currencies. */
+export function sumByCurrency(
+  rows: ReadonlyArray<{ amountCents: number; currency: string }>,
+): Money[] {
+  const map = new Map<Currency, number>();
+  for (const row of rows) {
+    const c = asCurrency(row.currency);
+    map.set(c, (map.get(c) ?? 0) + row.amountCents);
+  }
+  return CURRENCIES.filter((c) => map.has(c)).map((c) =>
+    money(map.get(c)!, c),
+  );
 }

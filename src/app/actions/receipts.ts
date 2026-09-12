@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { ActionResult } from "@/app/actions/accounts";
 import { compatibleClient } from "@/lib/ai/provider";
 import { getUserAiCred, MissingAiKeyError } from "@/lib/ai/user-key";
-import { parseMxnInput } from "@/lib/money";
+import { asCurrency, parseMoneyInput } from "@/lib/money";
 import { merchantKey } from "@/lib/merchant";
 import { requireProjectWriter } from "@/lib/projects";
 import type { Json } from "@/lib/database.types";
@@ -555,25 +555,28 @@ export async function applyReceipt(
     return { ok: false, error: "El ticket aún no está listo para aplicar." };
   }
 
-  let amountCents: number;
-  try {
-    amountCents = parseMxnInput(parsed.data.amount).amount;
-  } catch {
-    return { ok: false, error: "Monto inválido." };
-  }
-  if (amountCents <= 0) {
-    return { ok: false, error: "El monto debe ser mayor a 0." };
-  }
-
   const { data: account, error: accountError } = await supabase
     .from("accounts")
-    .select("id, type, balance_cents")
+    .select("id, type, balance_cents, currency")
     .eq("id", parsed.data.accountId)
     .eq("project_id", project.id)
     .single();
 
   if (accountError || !account) {
     return { ok: false, error: "Cuenta no encontrada." };
+  }
+
+  let amountCents: number;
+  try {
+    amountCents = parseMoneyInput(
+      parsed.data.amount,
+      asCurrency(account.currency),
+    ).amount;
+  } catch {
+    return { ok: false, error: "Monto inválido." };
+  }
+  if (amountCents <= 0) {
+    return { ok: false, error: "El monto debe ser mayor a 0." };
   }
 
   let statementPeriodId: string | null = null;
@@ -609,6 +612,7 @@ export async function applyReceipt(
       account_id: account.id,
       type: parsed.data.type,
       amount_cents: amountCents,
+      currency: asCurrency(account.currency),
       merchant: parsed.data.merchant ?? null,
       merchant_key: merchantKey(parsed.data.merchant),
       description: parsed.data.description ?? null,
