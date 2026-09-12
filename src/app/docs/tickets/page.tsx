@@ -1,12 +1,12 @@
 ﻿import type { Metadata } from "next";
 import { DocsArticleView } from "@/components/docs/docs-article";
-import { mcpArticle } from "@/lib/docs/content/mcp";
+import { ticketsArticle } from "@/lib/docs/content/mas";
 
 export const metadata: Metadata = {
-  title: "MCP",
-  description: mcpArticle.description,
+  title: "Tickets",
+  description: ticketsArticle.description,
 };
 
 export default function Page() {
-  return <DocsArticleView article={mcpArticle} />;
+  return <DocsArticleView article={ticketsArticle} />;
 }

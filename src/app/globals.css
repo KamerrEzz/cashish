@@ -175,3 +175,9 @@ body {
     transform: translateY(0);
   }
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .docs-index-hero {
+    animation: landing-rise 0.55s ease both;
+  }
+}

@@ -64,8 +64,8 @@ export default function HomePage() {
           <Link href="/login" className={btnGhost}>
             Entrar
           </Link>
-          <Link href="/docs/mcp" className={btnGhost}>
-            Docs MCP
+          <Link href="/docs" className={btnGhost}>
+            Documentación
           </Link>
         </div>
       </main>
