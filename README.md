@@ -96,6 +96,14 @@ npm run build
 | `RESEND_API_KEY` | Emails de recordatorio (opcional) |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Push web (opcional; sin ella la UI pide configurar VAPID) |
 
+### Auth (Supabase)
+
+- UI: `/login` (entrar) y `/register` (crear cuenta). El enlace mágico solo inicia sesión (`shouldCreateUser: false`).
+- Callback PKCE: `{APP_URL}/auth/callback`.
+- En el dashboard de Supabase → Authentication → URL configuration, incluye exactamente:
+  - Site URL: `https://cashish-beta.vercel.app` (o tu dominio)
+  - Redirect URLs: `https://cashish-beta.vercel.app/auth/callback` y previews si las usas (`https://*.vercel.app/auth/callback` si el plan lo permite)
+
 ## Estructura
 
 ```

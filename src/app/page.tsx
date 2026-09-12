@@ -58,7 +58,10 @@ export default function HomePage() {
           antes de que llegue el día.
         </p>
         <div className="mt-10 flex flex-wrap gap-3">
-          <Link href="/login" className={`${btnPrimary} text-base`}>
+          <Link href="/register" className={`${btnPrimary} text-base`}>
+            Crear cuenta
+          </Link>
+          <Link href="/login" className={btnGhost}>
             Entrar
           </Link>
           <Link href="/docs/mcp" className={btnGhost}>
